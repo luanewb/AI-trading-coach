@@ -16,5 +16,5 @@ def require_mt5_api_key(x_api_key: str | None = Header(default=None)) -> None:
 def current_account_or_404(db: Session) -> Account:
     account = get_current_account(db)
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No account has been connected yet")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No real MT5 account has been connected yet")
     return account

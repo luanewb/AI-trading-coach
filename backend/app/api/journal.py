@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,8 @@ from app.db.session import get_db
 from app.models import Trade
 from app.schemas.journal import StatsOut, TradeOut, TradePatch
 from app.services.stats import calculate_stats
+from app.services.stats import executed_trade_filter
+from app.services.stats import get_current_account
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -20,7 +22,14 @@ def list_trades(
     result: str | None = Query(default=None, pattern="^(win|loss)$"),
     trade_date: date | None = None,
 ) -> list[Trade]:
-    stmt = select(Trade).order_by(Trade.open_time.desc().nullslast(), Trade.id.desc())
+    account = get_current_account(db)
+    if not account:
+        return []
+    stmt = (
+        select(Trade)
+        .where(Trade.account_id == account.id, executed_trade_filter())
+        .order_by(Trade.open_time.desc().nullslast(), Trade.id.desc())
+    )
     if symbol:
         stmt = stmt.where(Trade.symbol.ilike(f"%{symbol}%"))
     if setup:
@@ -38,10 +47,11 @@ def list_trades(
 
 @router.patch("/trades/{trade_id}", response_model=TradeOut)
 def update_trade(trade_id: int, payload: TradePatch, db: Session = Depends(get_db)) -> Trade:
+    account = get_current_account(db)
+    if not account:
+        raise HTTPException(status_code=404, detail="No real MT5 account has been connected yet")
     trade = db.get(Trade, trade_id)
-    if not trade:
-        from fastapi import HTTPException
-
+    if not trade or trade.account_id != account.id:
         raise HTTPException(status_code=404, detail="Trade not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(trade, field, value)
@@ -52,4 +62,16 @@ def update_trade(trade_id: int, payload: TradePatch, db: Session = Depends(get_d
 
 @router.get("/stats", response_model=StatsOut)
 def stats(db: Session = Depends(get_db)) -> dict[str, float | int]:
-    return calculate_stats(db)
+    account = get_current_account(db)
+    if not account:
+        return {
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "average_r": 0.0,
+            "max_drawdown": 0.0,
+            "trades_today": 0,
+            "daily_pnl": 0.0,
+            "consecutive_losses": 0,
+        }
+    return calculate_stats(db, account.id)

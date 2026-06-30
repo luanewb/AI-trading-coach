@@ -1,4 +1,21 @@
-import type { Account, Alert, DailyReview, PreTradeCheck, RiskRule, RuleCatalog, RuleCatalogCreate, Stats, Trade } from "./types";
+import type {
+  Account,
+  AccountSnapshotPoint,
+  Alert,
+  DailyReview,
+  PreTradeCheck,
+  PreTradeHistoryItem,
+  RiskActivityFilter,
+  RiskActivityItem,
+  RiskRule,
+  RiskSummary,
+  RuleCatalog,
+  RuleCatalogCreate,
+  RuleIndicator,
+  SnapshotRange,
+  Stats,
+  Trade
+} from "./types";
 
 const PUBLIC_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const API_BASE_URL = typeof window === "undefined"
@@ -44,6 +61,11 @@ export const api = {
     request<void>(`/api/rules/catalog/${code}`, { method: "DELETE" }),
   evaluateRules: () => request<{ status: string; allow_trading: boolean; alerts_created: string[] }>("/api/rules/evaluate", { method: "POST" }),
   preTradeChecks: (blockedOnly = true) => request<PreTradeCheck[]>(`/api/rules/pre-trade-checks?blocked_only=${blockedOnly}`),
+  riskSummary: () => request<RiskSummary>("/api/dashboard/risk-summary"),
+  riskActivity: (filter: RiskActivityFilter = "all") => request<RiskActivityItem[]>(`/api/dashboard/risk-activity?filter=${filter}`),
+  accountSnapshots: (range: SnapshotRange = "7d") => request<AccountSnapshotPoint[]>(`/api/dashboard/account-snapshots?range=${range}`),
+  preTradeHistory: () => request<PreTradeHistoryItem[]>("/api/dashboard/pre-trade-history"),
+  ruleIndicators: () => request<RuleIndicator[]>("/api/dashboard/rule-indicators"),
   dailyReview: () => request<DailyReview | null>("/api/ai/daily-review"),
   createDailyReview: () => request<DailyReview>("/api/ai/daily-review", { method: "POST", body: JSON.stringify({}) })
 };

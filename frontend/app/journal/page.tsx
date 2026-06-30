@@ -1,17 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Save, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Trade } from "@/lib/types";
+
+const PAGE_SIZE = 20;
 
 function formatMoney(value: string | number | null) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 }
 
+function formatOrderType(value: string) {
+  const normalized = value.toUpperCase();
+  if (normalized === "ORDER_TYPE_BUY" || normalized === "BUY") return "Buy";
+  if (normalized === "ORDER_TYPE_SELL" || normalized === "SELL") return "Sell";
+  return value.replace(/^ORDER_TYPE_/i, "").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
 export default function JournalPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filters, setFilters] = useState({ symbol: "", setup: "", result: "", trade_date: "" });
+  const [page, setPage] = useState(1);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +44,7 @@ export default function JournalPage() {
   }
 
   useEffect(() => {
+    setPage(1);
     void load();
   }, [query]);
 
@@ -55,6 +66,12 @@ export default function JournalPage() {
   function updateTrade(id: number, patch: Partial<Trade>) {
     setTrades((current) => current.map((trade) => (trade.id === id ? { ...trade, ...patch } : trade)));
   }
+
+  const pageCount = Math.max(1, Math.ceil(trades.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleTrades = trades.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const firstRow = trades.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0;
+  const lastRow = Math.min(currentPage * PAGE_SIZE, trades.length);
 
   return (
     <div className="page-frame">
@@ -101,11 +118,11 @@ export default function JournalPage() {
             </tr>
           </thead>
           <tbody>
-            {trades.map((trade) => (
+            {visibleTrades.map((trade) => (
               <tr key={trade.id} className="border-t border-line align-top text-zinc-300 hover:bg-elevated/60">
                 <td className="p-3 font-medium text-zinc-100">{trade.ticket}</td>
                 <td className="p-3 font-semibold text-zinc-50">{trade.symbol}</td>
-                <td className="p-3">{trade.order_type}</td>
+                <td className="p-3">{formatOrderType(trade.order_type)}</td>
                 <td className="p-3 tabular-nums">{trade.lot}</td>
                 <td className={`p-3 font-semibold ${Number(trade.profit) >= 0 ? "text-good" : "text-bad"}`}>{formatMoney(trade.profit)}</td>
                 <td className="p-3 tabular-nums">{trade.r_multiple ?? "-"}</td>
@@ -134,6 +151,34 @@ export default function JournalPage() {
           </tbody>
         </table>
         </div>
+        {trades.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-line p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-400">
+              Showing {firstRow}-{lastRow} of {trades.length} trades · {PAGE_SIZE} per page
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                className="secondary-action h-9 px-3"
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} aria-hidden />
+                Prev
+              </button>
+              <span className="rounded-lg border border-line bg-elevated px-3 py-2 text-sm font-semibold text-zinc-200">
+                Page {currentPage} / {pageCount}
+              </span>
+              <button
+                className="secondary-action h-9 px-3"
+                onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                disabled={currentPage === pageCount}
+              >
+                Next
+                <ChevronRight size={16} aria-hidden />
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

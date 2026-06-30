@@ -112,3 +112,104 @@ export type PreTradeCheck = {
   reason: string;
   created_at: string;
 };
+
+export type RiskBudget = {
+  current: string;
+  used: string;
+  limit: string;
+  remaining: string;
+  percent_used: number;
+  percent_remaining: number;
+};
+
+export type CountBudget = {
+  current: number;
+  limit: number;
+  remaining: number;
+  percent_used: number;
+  percent_remaining: number;
+};
+
+export type RiskSummary = {
+  account_id: number;
+  account_number: string;
+  trading_status: "allowed" | "warning" | "blocked" | "locked";
+  status_label: string;
+  status_reason: string;
+  current_daily_pnl: string;
+  daily_loss: RiskBudget;
+  total_drawdown: RiskBudget;
+  trades_today: CountBudget;
+  consecutive_losses: CountBudget;
+  cooldown: {
+    active: boolean;
+    cooldown_until: string | null;
+    remaining_seconds: number;
+  };
+  max_lot: {
+    planned_lot: string | null;
+    configured_max_lot: string;
+  };
+  active_restrictions: Array<{
+    rule_code: string;
+    severity: string;
+    action: string;
+    message: string;
+    created_at: string;
+  }>;
+  checked_at: string;
+};
+
+export type RiskActivityFilter = "all" | "warning" | "blocked" | "locked" | "resolved";
+
+export type RiskActivityItem = {
+  id: string;
+  timestamp: string;
+  rule_code: string;
+  severity: string;
+  action: string;
+  message: string;
+  source: "rule_violation" | "pre_trade_check";
+  decision: string | null;
+  symbol: string | null;
+  ticket: string | null;
+  status: "active" | "resolved";
+};
+
+export type SnapshotRange = "24h" | "7d" | "30d";
+
+export type AccountSnapshotPoint = {
+  id: number;
+  timestamp: string;
+  balance: string;
+  equity: string;
+  drawdown: string;
+  drawdown_percent: number;
+};
+
+export type PreTradeHistoryItem = {
+  id: number;
+  timestamp: string;
+  symbol: string;
+  side: string;
+  lot: string;
+  entry_price: string | null;
+  sl: string | null;
+  tp: string | null;
+  decision: string;
+  allowed: boolean;
+  reason: string;
+  warning_count: number;
+  violation_count: number;
+  rule_codes: string[];
+  details: Record<string, unknown>;
+};
+
+export type RuleIndicator = {
+  rule_code: string;
+  enabled: boolean;
+  latest_trigger_time: string | null;
+  trigger_count_today: number;
+  latest_action_taken: string | null;
+  current_active_state: string;
+};

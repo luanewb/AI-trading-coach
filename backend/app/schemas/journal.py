@@ -1,7 +1,21 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.services.trade_direction import normalize_order_type
+
+
+def realized_r(order_type: str, entry_price: Decimal | None, sl: Decimal | None, close_price: Decimal | None, profit: Decimal) -> Decimal | None:
+    if entry_price is None or sl is None or close_price is None:
+        return None
+    risk = abs(entry_price - sl)
+    if not risk:
+        return None
+    reward = entry_price - close_price if order_type == "SELL" else close_price - entry_price
+    if reward == 0 and profit != 0:
+        return None
+    return reward / risk
 
 
 class TradeOut(BaseModel):
@@ -32,6 +46,13 @@ class TradeOut(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def normalize_side(self) -> "TradeOut":
+        self.order_type = normalize_order_type(self.order_type, self.entry_price, self.sl, self.tp)
+        if self.status == "closed":
+            self.r_multiple = realized_r(self.order_type, self.entry_price, self.sl, self.close_price, self.profit)
+        return self
 
     model_config = {"from_attributes": True}
 

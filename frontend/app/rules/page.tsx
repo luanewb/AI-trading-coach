@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, PlayCircle, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { RiskRule, RuleCatalog, RuleCatalogCreate } from "@/lib/types";
+import type { RiskRule, RuleCatalog, RuleCatalogCreate, RuleIndicator } from "@/lib/types";
 
 const emptyRule: Omit<RiskRule, "id" | "account_id"> = {
   max_trades_per_day: 5,
@@ -45,19 +45,45 @@ const builtInRuleCodes = new Set([
   "REVENGE_TRADING"
 ]);
 
+function dateTime(value: string | null) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" }).format(date);
+}
+
+function indicatorTone(state: string) {
+  if (state === "inactive") return "bg-emerald-400/10 text-good";
+  if (state === "warn") return "bg-amber-400/10 text-warn";
+  return "bg-red-500/10 text-bad";
+}
+
 export default function RulesPage() {
   const [rule, setRule] = useState(emptyRule);
   const [catalog, setCatalog] = useState<RuleCatalog[]>([]);
+  const [indicators, setIndicators] = useState<RuleIndicator[]>([]);
   const [newRule, setNewRule] = useState<RuleCatalogCreate>(emptyCatalogRule);
   const [configText, setConfigText] = useState("{}");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.rules(), api.ruleCatalog()])
-      .then(([{ id, account_id, ...data }, rules]) => {
-        setRule(data);
-        setCatalog(rules);
+    Promise.allSettled([api.rules(), api.ruleCatalog(), api.ruleIndicators()])
+      .then(([rulesConfig, catalogResult, indicatorResult]) => {
+        if (rulesConfig.status === "fulfilled") {
+          const { id, account_id, ...data } = rulesConfig.value;
+          setRule(data);
+        }
+        if (catalogResult.status === "fulfilled") {
+          setCatalog(catalogResult.value);
+        }
+        if (indicatorResult.status === "fulfilled") {
+          setIndicators(indicatorResult.value);
+        }
+        const failed = [rulesConfig, catalogResult, indicatorResult].some((result) => result.status === "rejected");
+        if (failed) {
+          setError("Some rule data could not be loaded. Saved configuration remains available when the API reconnects.");
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load rules"));
   }, []);
@@ -128,6 +154,10 @@ export default function RulesPage() {
 
   function normalizeCode(value: string) {
     return value.toUpperCase().replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+  }
+
+  function indicatorFor(code: string) {
+    return indicators.find((item) => item.rule_code === code);
   }
 
   return (
@@ -203,8 +233,19 @@ export default function RulesPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-zinc-100">{item.name}</span>
                     <span className="rounded border border-white/10 px-2 py-0.5 text-xs text-zinc-400">{item.code}</span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-semibold ${item.enabled ? "bg-emerald-400/10 text-good" : "bg-zinc-700/60 text-zinc-400"}`}>
+                      {item.enabled ? "Enabled" : "Disabled"}
+                    </span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-zinc-400">{item.message}</p>
+                  {indicatorFor(item.code) && (
+                    <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2 xl:grid-cols-4">
+                      <span>Triggered today: <strong className="text-zinc-200">{indicatorFor(item.code)?.trigger_count_today}</strong></span>
+                      <span>Status: <strong className={`rounded px-1.5 py-0.5 ${indicatorTone(indicatorFor(item.code)?.current_active_state || "inactive")}`}>{indicatorFor(item.code)?.current_active_state}</strong></span>
+                      <span>Last action: <strong className="text-zinc-200">{indicatorFor(item.code)?.latest_action_taken || "none"}</strong></span>
+                      <span>Last trigger: <strong className="text-zinc-200">{dateTime(indicatorFor(item.code)?.latest_trigger_time || null)}</strong></span>
+                    </div>
+                  )}
                 </div>
                 <select className="input-field h-10 w-full" value={item.action} onChange={(event) => updateCatalogRule(item.code, { action: event.target.value as RuleCatalog["action"] })}>
                   {actionOptions.map((option) => <option key={option} value={option}>{option}</option>)}

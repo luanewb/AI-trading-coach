@@ -18,7 +18,7 @@ class HeartbeatIn(BaseModel):
 
 class TradeEventIn(BaseModel):
     account_number: str | None = Field(default=None, max_length=64)
-    event_type: Literal["order_opened", "order_modified", "order_closed", "position_updated"]
+    event_type: Literal["order_opened", "order_pending", "order_modified", "order_closed", "position_updated"]
     symbol: str = Field(min_length=1, max_length=32)
     ticket: str = Field(min_length=1, max_length=64)
     deal_id: str | None = Field(default=None, max_length=64)

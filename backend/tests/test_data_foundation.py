@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.models import Account, AccountSnapshot, PreTradeCheck, RuleEvaluation, RuleViolation, Trade, TradeEvent
 from app.schemas.mt5 import HeartbeatIn, TradeEventIn
 from app.schemas.pre_trade import PreTradeCheckIn
+from app.services import stats as stats_service
 from app.services.rule_engine import get_or_create_rule, pre_trade_check
 
 
@@ -108,6 +109,56 @@ def test_duplicate_trade_event_does_not_create_duplicate_trade(db_session: Sessi
     assert first["trade_id"] == second["trade_id"]
     assert db_session.scalar(select(func.count(Trade.id)).where(Trade.ticket == "900001")) == 1
     assert db_session.scalar(select(func.count(TradeEvent.id)).where(TradeEvent.ticket == "900001")) == 1
+
+
+def test_pending_order_event_does_not_create_trade(db_session: Session) -> None:
+    account = _account(db_session)
+    payload = TradeEventIn(
+        account_number=account.account_number,
+        event_type="order_pending",
+        symbol="XAUUSD",
+        ticket="910001",
+        order_type="BUY",
+        lot=Decimal("0.50"),
+        entry_price=Decimal("2320.50"),
+        sl=Decimal("2312.50"),
+        tp=Decimal("2338.50"),
+        open_time=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+    )
+
+    response = receive_trade_event(payload, db_session)
+
+    assert response["ignored"] is True
+    assert db_session.scalar(select(func.count(Trade.id)).where(Trade.ticket == "910001")) == 0
+    assert db_session.scalar(select(func.count(TradeEvent.id)).where(TradeEvent.ticket == "910001")) == 1
+
+
+def test_trades_today_ignores_unexecuted_open_orders(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    account = _account(db_session)
+    day_start = datetime(2026, 6, 30, 0, 0, tzinfo=timezone.utc)
+    day_end = datetime(2026, 6, 30, 23, 59, 59, tzinfo=timezone.utc)
+    monkeypatch.setattr(stats_service, "trading_day_bounds", lambda: (day_start, day_end))
+    db_session.add(
+        Trade(
+            account_id=account.id,
+            ticket="910002",
+            symbol="XAUUSD",
+            order_type="BUY",
+            lot=Decimal("0.50"),
+            profit=Decimal("0"),
+            commission=Decimal("0"),
+            swap=Decimal("0"),
+            status="open",
+            open_time=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+            source="mt5",
+        )
+    )
+    db_session.commit()
+
+    stats = stats_service.calculate_stats(db_session, account.id)
+
+    assert stats["trades_today"] == 0
 
 
 def test_pre_trade_check_and_rule_violations_persist(db_session: Session) -> None:

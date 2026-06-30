@@ -321,7 +321,7 @@ string EventTypeFromTransaction(const MqlTradeTransaction &trans)
       return "position_updated";
    }
    if(trans.type == TRADE_TRANSACTION_ORDER_ADD)
-      return "order_opened";
+      return "order_pending";
    if(trans.type == TRADE_TRANSACTION_ORDER_UPDATE)
       return "order_modified";
    if(trans.type == TRADE_TRANSACTION_POSITION)
@@ -350,15 +350,21 @@ void SendTradeEvent(const MqlTradeTransaction &trans, const MqlTradeRequest &req
 
    double sl = trans.price_sl;
    double tp = trans.price_tp;
-   double close_price = (close_time > 0 ? trans.price : 0.0);
+   double close_price = 0.0;
+   if(close_time > 0 && trans.deal > 0 && HistoryDealSelect(trans.deal))
+      close_price = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
    string close_time_json = (close_time > 0 ? "\"" + IsoTime(close_time) + "\"" : "null");
+   string deal_id_json = (trans.deal > 0 ? "\"" + IntegerToString((long)trans.deal) + "\"" : "null");
+   string position_id_json = (trans.position > 0 ? "\"" + IntegerToString((long)trans.position) + "\"" : "null");
 
    string json = StringFormat(
-      "{\"account_number\":\"%I64d\",\"event_type\":\"%s\",\"symbol\":\"%s\",\"ticket\":\"%I64d\",\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%.5f,\"sl\":%s,\"tp\":%s,\"close_price\":%s,\"profit\":%.2f,\"commission\":%.2f,\"swap\":%.2f,\"open_time\":\"%s\",\"close_time\":%s}",
+      "{\"account_number\":\"%I64d\",\"event_type\":\"%s\",\"symbol\":\"%s\",\"ticket\":\"%I64d\",\"deal_id\":%s,\"position_id\":%s,\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%.5f,\"sl\":%s,\"tp\":%s,\"close_price\":%s,\"profit\":%.2f,\"commission\":%.2f,\"swap\":%.2f,\"open_time\":\"%s\",\"close_time\":%s}",
       AccountInfoInteger(ACCOUNT_LOGIN),
       EventTypeFromTransaction(trans),
       JsonEscape(symbol),
       (long)(trans.order > 0 ? trans.order : trans.position),
+      deal_id_json,
+      position_id_json,
       JsonEscape(EnumToString(request.type)),
       trans.volume,
       trans.price,

@@ -12,9 +12,12 @@ from app.db.session import get_db
 from app.models import Account, AccountSnapshot, Trade, TradeEvent
 from app.schemas.mt5 import HeartbeatIn, TradeEventIn
 from app.services.rule_engine import evaluate_rules, get_or_create_rule
+from app.services.stats import real_account_filter
+from app.services.trade_direction import is_sell_order, normalize_order_type
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/mt5", tags=["mt5"])
+TRACKED_TRADE_EVENT_TYPES = {"order_opened", "order_closed"}
 
 
 def _jsonable(value: Any) -> Any:
@@ -46,13 +49,46 @@ def _event_key(account_id: int, payload: TradeEventIn) -> str:
     return "|".join(parts)
 
 
+def _upsert_trade_event(db: Session, account_id: int, payload: TradeEventIn, trade_id: int | None = None) -> TradeEvent:
+    event_key = _event_key(account_id, payload)
+    event = db.scalar(select(TradeEvent).where(TradeEvent.event_key == event_key))
+    if not event:
+        event = TradeEvent(
+            account_id=account_id,
+            trade_id=trade_id,
+            event_key=event_key,
+            event_type=payload.event_type,
+            ticket=payload.ticket,
+            deal_id=payload.deal_id,
+            position_id=payload.position_id,
+            symbol=payload.symbol,
+            order_type=payload.order_type,
+            lot=payload.lot,
+            entry_price=payload.entry_price,
+            sl=payload.sl,
+            tp=payload.tp,
+            close_price=payload.close_price,
+            profit=payload.profit,
+            commission=payload.commission,
+            swap=payload.swap,
+            open_time=payload.open_time,
+            close_time=payload.close_time,
+            event_time=payload.timestamp,
+            payload=_jsonable(payload.model_dump()),
+        )
+        db.add(event)
+    elif trade_id:
+        event.trade_id = trade_id
+    return event
+
+
 def _calculate_r_multiple(trade: Trade) -> Decimal | None:
     if not trade.entry_price or not trade.sl or not trade.close_price:
         return None
     risk = abs(Decimal(trade.entry_price) - Decimal(trade.sl))
     if not risk:
         return None
-    if str(trade.order_type).lower() in {"sell", "short"}:
+    if is_sell_order(trade.order_type, trade.entry_price, trade.sl, trade.tp):
         reward = Decimal(trade.entry_price) - Decimal(trade.close_price)
     else:
         reward = Decimal(trade.close_price) - Decimal(trade.entry_price)
@@ -106,12 +142,26 @@ def receive_trade_event(payload: TradeEventIn, db: Session = Depends(get_db)) ->
     if payload.account_number:
         account = db.scalar(select(Account).where(Account.account_number == payload.account_number))
     if not account:
-        account = db.scalar(select(Account).order_by(Account.updated_at.desc(), Account.id.desc()).limit(1))
+        account = db.scalar(
+            select(Account)
+            .where(real_account_filter())
+            .order_by(Account.updated_at.desc(), Account.id.desc())
+            .limit(1)
+        )
     if not account:
         raise HTTPException(status_code=400, detail="Send heartbeat before trade events")
 
+    is_close_event = payload.event_type == "order_closed"
+    is_tracked_trade_event = payload.event_type in TRACKED_TRADE_EVENT_TYPES
     trade = db.scalar(select(Trade).where(Trade.account_id == account.id, Trade.ticket == payload.ticket))
-    status = "closed" if payload.event_type == "order_closed" else "open"
+    if not trade and not is_tracked_trade_event:
+        _upsert_trade_event(db, account.id, payload)
+        db.commit()
+        logger.info("Ignored non-executed trade event %s for ticket %s", payload.event_type, payload.ticket)
+        return {"ok": True, "ignored": True}
+
+    status = "closed" if is_close_event else "open"
+    order_type = normalize_order_type(payload.order_type, payload.entry_price, payload.sl, payload.tp)
     if not trade:
         trade = Trade(
             account_id=account.id,
@@ -119,7 +169,7 @@ def receive_trade_event(payload: TradeEventIn, db: Session = Depends(get_db)) ->
             deal_id=payload.deal_id,
             position_id=payload.position_id,
             symbol=payload.symbol,
-            order_type=payload.order_type,
+            order_type=order_type,
             lot=payload.lot,
             entry_price=payload.entry_price,
             sl=payload.sl,
@@ -139,17 +189,28 @@ def receive_trade_event(payload: TradeEventIn, db: Session = Depends(get_db)) ->
         trade.deal_id = payload.deal_id or trade.deal_id
         trade.position_id = payload.position_id or trade.position_id
         trade.symbol = payload.symbol
-        trade.order_type = payload.order_type
-        trade.lot = payload.lot
-        trade.entry_price = payload.entry_price
-        trade.sl = payload.sl
-        trade.tp = payload.tp
+        trade.order_type = normalize_order_type(
+            order_type or trade.order_type,
+            payload.entry_price or trade.entry_price,
+            payload.sl if payload.sl is not None else trade.sl,
+            payload.tp if payload.tp is not None else trade.tp,
+        )
+        if not is_close_event:
+            trade.lot = payload.lot
+            trade.entry_price = payload.entry_price
+            trade.sl = payload.sl
+            trade.tp = payload.tp
+        else:
+            trade.lot = trade.lot or payload.lot
+            trade.entry_price = trade.entry_price or payload.entry_price
+            trade.sl = trade.sl if trade.sl is not None else payload.sl
+            trade.tp = trade.tp if trade.tp is not None else payload.tp
         trade.close_price = payload.close_price
         trade.profit = payload.profit
         trade.commission = payload.commission
         trade.swap = payload.swap
         trade.status = status
-        trade.open_time = payload.open_time or trade.open_time
+        trade.open_time = trade.open_time or payload.open_time
         trade.close_time = payload.close_time or trade.close_time
         trade.source = payload.source or trade.source
         trade.strategy = payload.strategy or trade.strategy
@@ -157,35 +218,7 @@ def receive_trade_event(payload: TradeEventIn, db: Session = Depends(get_db)) ->
     db.flush()
     trade.r_multiple = _calculate_r_multiple(trade)
 
-    event_key = _event_key(account.id, payload)
-    event = db.scalar(select(TradeEvent).where(TradeEvent.event_key == event_key))
-    if not event:
-        event = TradeEvent(
-            account_id=account.id,
-            trade_id=trade.id,
-            event_key=event_key,
-            event_type=payload.event_type,
-            ticket=payload.ticket,
-            deal_id=payload.deal_id,
-            position_id=payload.position_id,
-            symbol=payload.symbol,
-            order_type=payload.order_type,
-            lot=payload.lot,
-            entry_price=payload.entry_price,
-            sl=payload.sl,
-            tp=payload.tp,
-            close_price=payload.close_price,
-            profit=payload.profit,
-            commission=payload.commission,
-            swap=payload.swap,
-            open_time=payload.open_time,
-            close_time=payload.close_time,
-            event_time=payload.timestamp,
-            payload=_jsonable(payload.model_dump()),
-        )
-        db.add(event)
-    else:
-        event.trade_id = trade.id
+    _upsert_trade_event(db, account.id, payload, trade.id)
 
     result = evaluate_rules(db, account, trade)
     db.commit()

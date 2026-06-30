@@ -1,10 +1,12 @@
 from decimal import Decimal
 
-from sqlalchemy import Select, and_, asc, func, or_, select
+from sqlalchemy import Select, and_, asc, func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Account, Trade
 from app.services.timezone import trading_day_bounds
+
+SEED_DEMO_ACCOUNT_NUMBERS = {"100001"}
 
 
 def _closed_trade_query(account_id: int | None = None) -> Select[tuple[Trade]]:
@@ -14,8 +16,27 @@ def _closed_trade_query(account_id: int | None = None) -> Select[tuple[Trade]]:
     return stmt
 
 
+def executed_trade_filter():
+    return or_(Trade.status == "closed", Trade.deal_id.is_not(None), Trade.position_id.is_not(None))
+
+
+def is_seed_demo_account(account: Account | None) -> bool:
+    if not account:
+        return False
+    return str(account.account_number) in SEED_DEMO_ACCOUNT_NUMBERS
+
+
+def real_account_filter():
+    return not_(Account.account_number.in_(SEED_DEMO_ACCOUNT_NUMBERS))
+
+
 def get_current_account(db: Session) -> Account | None:
-    return db.scalar(select(Account).order_by(Account.updated_at.desc(), Account.id.desc()).limit(1))
+    return db.scalar(
+        select(Account)
+        .where(real_account_filter())
+        .order_by(Account.updated_at.desc(), Account.id.desc())
+        .limit(1)
+    )
 
 
 def count_consecutive_losses(trades: list[Trade]) -> int:
@@ -50,7 +71,9 @@ def calculate_stats(db: Session, account_id: int | None = None) -> dict[str, flo
         and_(Trade.open_time.is_not(None), Trade.open_time >= day_start, Trade.open_time <= day_end),
         and_(Trade.open_time.is_(None), Trade.created_at >= day_start, Trade.created_at <= day_end),
     )
-    trades_today_stmt = select(func.count(Trade.id)).where(opened_today)
+    closed_today = and_(Trade.close_time >= day_start, Trade.close_time <= day_end, Trade.status == "closed")
+    open_execution_today = and_(Trade.status != "closed", opened_today, executed_trade_filter())
+    trades_today_stmt = select(func.count(Trade.id)).where(or_(closed_today, open_execution_today))
     today_pnl_stmt = select(func.coalesce(func.sum(Trade.profit), 0)).where(
         Trade.close_time >= day_start,
         Trade.close_time <= day_end,
