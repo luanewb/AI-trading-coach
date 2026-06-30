@@ -43,6 +43,9 @@ export type Trade = {
   emotion: string | null;
   mistake_tags: string[] | null;
   notes: string | null;
+  before_entry_image_url: string | null;
+  after_exit_image_url: string | null;
+  analysis_image_url: string | null;
 };
 
 export type Alert = {

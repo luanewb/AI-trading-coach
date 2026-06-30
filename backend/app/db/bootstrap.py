@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_STATEMENTS = [
     "ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS max_risk_per_trade_percent NUMERIC(8,2) NOT NULL DEFAULT 1",
+    "ALTER TABLE trades ADD COLUMN IF NOT EXISTS before_entry_image_url TEXT",
+    "ALTER TABLE trades ADD COLUMN IF NOT EXISTS after_exit_image_url TEXT",
+    "ALTER TABLE trades ADD COLUMN IF NOT EXISTS analysis_image_url TEXT",
     "ALTER TABLE pre_trade_checks ADD COLUMN IF NOT EXISTS rule_codes JSONB NOT NULL DEFAULT '[]'::jsonb",
     "ALTER TABLE pre_trade_checks ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb",
     """

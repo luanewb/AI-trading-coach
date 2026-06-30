@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Save, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Save, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Trade } from "@/lib/types";
 
@@ -16,6 +16,13 @@ function formatOrderType(value: string) {
   if (normalized === "ORDER_TYPE_BUY" || normalized === "BUY") return "Buy";
   if (normalized === "ORDER_TYPE_SELL" || normalized === "SELL") return "Sell";
   return value.replace(/^ORDER_TYPE_/i, "").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function normalizeScreenshotUrl(value: string | null | undefined) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
 }
 
 export default function JournalPage() {
@@ -55,7 +62,10 @@ export default function JournalPage() {
         setup_name: trade.setup_name,
         emotion: trade.emotion,
         mistake_tags: trade.mistake_tags,
-        notes: trade.notes
+        notes: trade.notes,
+        before_entry_image_url: trade.before_entry_image_url,
+        after_exit_image_url: trade.after_exit_image_url,
+        analysis_image_url: trade.analysis_image_url
       } as Partial<Trade>);
       await load();
     } finally {
@@ -101,7 +111,7 @@ export default function JournalPage() {
 
       <section className="panel mt-5 overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="min-w-[1100px] w-full border-collapse text-sm">
+        <table className="min-w-[1420px] w-full border-collapse text-sm">
           <thead className="bg-paper text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
             <tr>
               <th className="p-3">Ticket</th>
@@ -114,6 +124,7 @@ export default function JournalPage() {
               <th className="p-3">Emotion</th>
               <th className="p-3">Mistakes</th>
               <th className="p-3">Notes</th>
+              <th className="p-3">Screenshots</th>
               <th className="p-3">Save</th>
             </tr>
           </thead>
@@ -137,6 +148,9 @@ export default function JournalPage() {
                 </td>
                 <td className="p-3"><textarea className="textarea-field h-16 w-56 resize-none" value={trade.notes ?? ""} onChange={(event) => updateTrade(trade.id, { notes: event.target.value })} /></td>
                 <td className="p-3">
+                  <ScreenshotLinks trade={trade} onChange={(patch) => updateTrade(trade.id, patch)} />
+                </td>
+                <td className="p-3">
                   <button className="grid h-9 w-9 place-items-center rounded-lg bg-accent text-slate-950 disabled:opacity-50" onClick={() => save(trade)} disabled={savingId === trade.id} aria-label="Save trade">
                     <Save size={16} aria-hidden />
                   </button>
@@ -145,7 +159,7 @@ export default function JournalPage() {
             ))}
             {!trades.length && (
               <tr>
-                <td className="p-6 text-zinc-400" colSpan={11}>No trades match the current filters.</td>
+                <td className="p-6 text-zinc-400" colSpan={12}>No trades match the current filters.</td>
               </tr>
             )}
           </tbody>
@@ -181,5 +195,52 @@ export default function JournalPage() {
         )}
       </section>
     </div>
+  );
+}
+
+function ScreenshotLinks({ trade, onChange }: { trade: Trade; onChange: (patch: Partial<Trade>) => void }) {
+  return (
+    <div className="grid w-64 gap-2">
+      <ScreenshotLinkInput
+        label="Before entry"
+        value={trade.before_entry_image_url}
+        onChange={(value) => onChange({ before_entry_image_url: value })}
+      />
+      <ScreenshotLinkInput
+        label="After exit"
+        value={trade.after_exit_image_url}
+        onChange={(value) => onChange({ after_exit_image_url: value })}
+      />
+      <ScreenshotLinkInput
+        label="Analysis"
+        value={trade.analysis_image_url}
+        onChange={(value) => onChange({ analysis_image_url: value })}
+      />
+    </div>
+  );
+}
+
+function ScreenshotLinkInput({ label, value, onChange }: { label: string; value: string | null; onChange: (value: string) => void }) {
+  const url = normalizeScreenshotUrl(value);
+  return (
+    <label className="grid grid-cols-[76px_1fr_32px] items-center gap-2 text-[11px] text-zinc-500">
+      <span className="whitespace-nowrap">{label}</span>
+      <input
+        className="input-field h-8 min-w-0 px-2 text-xs"
+        placeholder="tradingview.com/x/..."
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <a
+        className={`grid h-8 w-8 place-items-center rounded-lg border border-line bg-elevated text-zinc-300 transition hover:border-accent hover:text-accent ${url ? "" : "pointer-events-none opacity-35"}`}
+        href={url || undefined}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open ${label} screenshot`}
+        title={`Open ${label}`}
+      >
+        <ExternalLink size={14} aria-hidden />
+      </a>
+    </label>
   );
 }

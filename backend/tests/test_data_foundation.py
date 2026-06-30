@@ -81,6 +81,7 @@ def test_migration_upgrade_creates_foundation_tables(db_session: Session) -> Non
     assert {"account_snapshots", "trade_events", "daily_summaries"}.issubset(set(inspector.get_table_names()))
     trade_columns = {column["name"] for column in inspector.get_columns("trades")}
     assert {"deal_id", "position_id", "source", "strategy"}.issubset(trade_columns)
+    assert {"before_entry_image_url", "after_exit_image_url", "analysis_image_url"}.issubset(trade_columns)
     violation_columns = {column["name"] for column in inspector.get_columns("rule_violations")}
     assert {"is_resolved", "resolved_at", "resolution_note"}.issubset(violation_columns)
 

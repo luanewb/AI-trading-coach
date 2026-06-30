@@ -82,6 +82,9 @@ class Trade(Base):
     emotion: Mapped[str | None] = mapped_column(String(64))
     mistake_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), default=list)
     notes: Mapped[str | None] = mapped_column(Text)
+    before_entry_image_url: Mapped[str | None] = mapped_column(Text)
+    after_exit_image_url: Mapped[str | None] = mapped_column(Text)
+    analysis_image_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -44,6 +44,9 @@ class TradeOut(BaseModel):
     emotion: str | None
     mistake_tags: list[str] | None
     notes: str | None
+    before_entry_image_url: str | None = None
+    after_exit_image_url: str | None = None
+    analysis_image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -62,6 +65,9 @@ class TradePatch(BaseModel):
     emotion: str | None = Field(default=None, max_length=64)
     mistake_tags: list[str] | None = None
     notes: str | None = None
+    before_entry_image_url: str | None = Field(default=None, max_length=1024)
+    after_exit_image_url: str | None = Field(default=None, max_length=1024)
+    analysis_image_url: str | None = Field(default=None, max_length=1024)
 
 
 class StatsOut(BaseModel):

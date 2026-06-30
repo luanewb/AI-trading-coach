@@ -63,3 +63,17 @@ def test_trade_out_recalculates_realized_r_from_close_price():
 
     assert trade.order_type == "SELL"
     assert trade.r_multiple == Decimal("1")
+
+
+def test_trade_out_includes_screenshot_links():
+    trade = TradeOut.model_validate(
+        trade_payload(
+            before_entry_image_url="https://www.tradingview.com/x/3pqxSTjB/",
+            after_exit_image_url="https://www.tradingview.com/x/afterExit/",
+            analysis_image_url="https://www.tradingview.com/x/analysis/",
+        )
+    )
+
+    assert trade.before_entry_image_url == "https://www.tradingview.com/x/3pqxSTjB/"
+    assert trade.after_exit_image_url == "https://www.tradingview.com/x/afterExit/"
+    assert trade.analysis_image_url == "https://www.tradingview.com/x/analysis/"
