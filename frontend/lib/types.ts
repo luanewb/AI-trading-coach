@@ -60,8 +60,26 @@ export type RiskRule = {
   max_consecutive_losses: number;
   cooldown_minutes_after_loss: number;
   max_lot: string;
+  max_risk_per_trade_percent: string;
   allow_trading: boolean;
 };
+
+export type RuleCatalog = {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  enabled: boolean;
+  severity: "info" | "warning" | "critical";
+  action: "allow" | "warn" | "block" | "lock";
+  category: "risk" | "behavior" | "ftmo" | "execution" | "psychology";
+  config: Record<string, unknown>;
+  message: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuleCatalogCreate = Omit<RuleCatalog, "id" | "created_at" | "updated_at">;
 
 export type DailyReview = {
   id: number;

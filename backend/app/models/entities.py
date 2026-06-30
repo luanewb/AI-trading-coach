@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,11 +67,29 @@ class RiskRule(Base):
     max_consecutive_losses: Mapped[int] = mapped_column(Integer, default=3)
     cooldown_minutes_after_loss: Mapped[int] = mapped_column(Integer, default=30)
     max_lot: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=1)
+    max_risk_per_trade_percent: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=1)
     allow_trading: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     account: Mapped[Account] = relationship(back_populates="risk_rule")
+
+
+class Rule(Base):
+    __tablename__ = "rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    severity: Mapped[str] = mapped_column(String(16), default="warning")
+    action: Mapped[str] = mapped_column(String(16), default="block")
+    category: Mapped[str] = mapped_column(String(32), default="risk")
+    config: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class Alert(Base):
@@ -83,6 +101,37 @@ class Alert(Base):
     type: Mapped[str] = mapped_column(String(64), index=True)
     message: Mapped[str] = mapped_column(Text)
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RuleEvaluation(Base):
+    __tablename__ = "rule_evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
+    context: Mapped[str] = mapped_column(String(32), index=True)
+    allowed: Mapped[bool] = mapped_column(Boolean)
+    blocked: Mapped[bool] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(32))
+    decision: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text)
+    evaluation_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RuleViolation(Base):
+    __tablename__ = "rule_violations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    evaluation_id: Mapped[int] = mapped_column(ForeignKey("rule_evaluations.id", ondelete="CASCADE"), index=True)
+    rule_id: Mapped[int | None] = mapped_column(ForeignKey("rules.id", ondelete="SET NULL"), index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
+    rule_code: Mapped[str] = mapped_column(String(64), index=True)
+    severity: Mapped[str] = mapped_column(String(16))
+    action: Mapped[str] = mapped_column(String(16))
+    message: Mapped[str] = mapped_column(Text)
+    violation_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -99,6 +148,9 @@ class PreTradeCheck(Base):
     tp: Mapped[Decimal | None] = mapped_column(Numeric(18, 5))
     allowed: Mapped[bool] = mapped_column(Boolean)
     reason: Mapped[str] = mapped_column(Text)
+    rule_codes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    details: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    rule_evaluation_id: Mapped[int | None] = mapped_column(ForeignKey("rule_evaluations.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

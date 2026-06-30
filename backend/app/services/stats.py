@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import Select, asc, func, select
+from sqlalchemy import Select, and_, asc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Account, Trade
@@ -46,14 +46,21 @@ def calculate_stats(db: Session, account_id: int | None = None) -> dict[str, flo
         max_drawdown = min(max_drawdown, equity_curve - peak)
 
     day_start, day_end = trading_day_bounds()
-    today_stmt = select(func.count(Trade.id), func.coalesce(func.sum(Trade.profit), 0)).where(
+    opened_today = or_(
+        and_(Trade.open_time.is_not(None), Trade.open_time >= day_start, Trade.open_time <= day_end),
+        and_(Trade.open_time.is_(None), Trade.created_at >= day_start, Trade.created_at <= day_end),
+    )
+    trades_today_stmt = select(func.count(Trade.id)).where(opened_today)
+    today_pnl_stmt = select(func.coalesce(func.sum(Trade.profit), 0)).where(
         Trade.close_time >= day_start,
         Trade.close_time <= day_end,
         Trade.status == "closed",
     )
     if account_id:
-        today_stmt = today_stmt.where(Trade.account_id == account_id)
-    trades_today, daily_pnl = db.execute(today_stmt).one()
+        trades_today_stmt = trades_today_stmt.where(Trade.account_id == account_id)
+        today_pnl_stmt = today_pnl_stmt.where(Trade.account_id == account_id)
+    trades_today = db.scalar(trades_today_stmt)
+    daily_pnl = db.scalar(today_pnl_stmt)
 
     return {
         "total_trades": total_trades,

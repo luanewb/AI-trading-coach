@@ -5,12 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#151718",
-        line: "#D9DFE3",
-        paper: "#F6F7F4",
-        good: "#157F4F",
-        warn: "#B7791F",
-        bad: "#B42318"
+        ink: "#F8FAFC",
+        bg: "#07090D",
+        panel: "#10141D",
+        elevated: "#151B26",
+        line: "#263142",
+        paper: "#0C1017",
+        accent: "#2DD4BF",
+        good: "#34D399",
+        warn: "#FBBF24",
+        bad: "#FB7185"
       }
     }
   },

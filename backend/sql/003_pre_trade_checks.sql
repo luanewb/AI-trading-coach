@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS pre_trade_checks (
     tp NUMERIC(18,5),
     allowed BOOLEAN NOT NULL,
     reason TEXT NOT NULL,
+    rule_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    rule_evaluation_id INTEGER,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

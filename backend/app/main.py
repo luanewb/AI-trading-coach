@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import accounts, ai, alerts, journal, mt5, rules
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.db.bootstrap import bootstrap_database
+from app.db.session import engine
 
 configure_logging()
 settings = get_settings()
@@ -24,6 +26,11 @@ app.include_router(journal.router)
 app.include_router(rules.router)
 app.include_router(alerts.router)
 app.include_router(ai.router)
+
+
+@app.on_event("startup")
+def startup() -> None:
+    bootstrap_database(engine)
 
 
 @app.get("/health")

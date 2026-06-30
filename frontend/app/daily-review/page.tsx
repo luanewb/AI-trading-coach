@@ -36,28 +36,28 @@ export default function DailyReviewPage() {
   }, []);
 
   return (
-    <div className="pb-20">
-      <header className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className="page-frame">
+      <header className="page-header">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Daily Review</p>
-          <h2 className="mt-1 text-3xl font-semibold">Coach report</h2>
+          <p className="kicker">Daily Review</p>
+          <h2 className="page-title">Coach report</h2>
         </div>
-        <button className="flex h-10 items-center gap-2 bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50" onClick={generate} disabled={loading}>
+        <button className="primary-action" onClick={generate} disabled={loading}>
           <RefreshCw size={16} aria-hidden />
           Generate
         </button>
       </header>
 
-      {error && <p className="mt-4 border border-red-200 bg-red-50 p-3 text-sm text-bad">{error}</p>}
+      {error && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-bad">{error}</p>}
 
-      <section className="mt-5 border border-line bg-white p-5">
+      <section className="panel mt-5 p-5">
         <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded bg-ink text-white">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-accent">
             <Bot size={18} aria-hidden />
           </div>
           <div>
-            <h3 className="font-semibold">{review ? `Review for ${review.review_date}` : "No review yet"}</h3>
-            {review && <p className="text-sm text-zinc-600">PnL {review.pnl} | Trades {review.trade_count} | Win rate {Number(review.win_rate).toFixed(1)}%</p>}
+            <h3 className="font-semibold text-zinc-50">{review ? `Review for ${review.review_date}` : "No review yet"}</h3>
+            {review && <p className="text-sm text-zinc-400">PnL {review.pnl} | Trades {review.trade_count} | Win rate {Number(review.win_rate).toFixed(1)}%</p>}
           </div>
         </div>
 
@@ -72,7 +72,7 @@ export default function DailyReviewPage() {
             </div>
           </div>
         ) : (
-          <p className="mt-5 text-sm text-zinc-600">Generate a review after trades are synced from MT5.</p>
+          <p className="muted-copy mt-5">Generate a review after trades are synced from MT5.</p>
         )}
       </section>
     </div>
@@ -81,9 +81,9 @@ export default function DailyReviewPage() {
 
 function ReviewBlock({ title, body }: { title: string; body: string | null }) {
   return (
-    <div className="border border-line p-4">
-      <h4 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h4>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700">{body || "-"}</p>
+    <div className="panel-soft p-4">
+      <h4 className="kicker">{title}</h4>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{body || "-"}</p>
     </div>
   );
 }

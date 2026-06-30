@@ -1,22 +1,51 @@
-INSERT INTO accounts (account_number, broker, server, balance, equity, margin, free_margin)
-VALUES ('100001', 'Demo Broker', 'Demo-FTMO', 100000.00, 99850.00, 1200.00, 98650.00)
-ON CONFLICT (account_number) DO NOTHING;
+CREATE TABLE IF NOT EXISTS rules (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    code VARCHAR(64) UNIQUE NOT NULL,
+    description TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    severity VARCHAR(16) NOT NULL DEFAULT 'warning',
+    action VARCHAR(16) NOT NULL DEFAULT 'block',
+    category VARCHAR(32) NOT NULL DEFAULT 'risk',
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-INSERT INTO risk_rules (
-    account_id,
-    max_trades_per_day,
-    max_daily_loss_percent,
-    max_total_loss_percent,
-    max_consecutive_losses,
-    cooldown_minutes_after_loss,
-    max_lot,
-    max_risk_per_trade_percent,
-    allow_trading
-)
-SELECT id, 5, 5.00, 10.00, 3, 30, 2.00, 1.00, true
-FROM accounts
-WHERE account_number = '100001'
-ON CONFLICT (account_id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS rule_evaluations (
+    id SERIAL PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    context VARCHAR(32) NOT NULL,
+    allowed BOOLEAN NOT NULL,
+    blocked BOOLEAN NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    decision VARCHAR(16) NOT NULL,
+    reason TEXT NOT NULL,
+    message TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS rule_violations (
+    id SERIAL PRIMARY KEY,
+    evaluation_id INTEGER NOT NULL REFERENCES rule_evaluations(id) ON DELETE CASCADE,
+    rule_id INTEGER REFERENCES rules(id) ON DELETE SET NULL,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    rule_code VARCHAR(64) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    action VARCHAR(16) NOT NULL,
+    message TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE pre_trade_checks
+ADD COLUMN IF NOT EXISTS rule_evaluation_id INTEGER REFERENCES rule_evaluations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_rules_code ON rules(code);
+CREATE INDEX IF NOT EXISTS idx_rule_evaluations_account_checked_at ON rule_evaluations(account_id, checked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rule_violations_rule_code ON rule_violations(rule_code);
 
 INSERT INTO rules (name, code, description, enabled, severity, action, category, config, message)
 VALUES
@@ -32,35 +61,3 @@ VALUES
 ('Risk per trade', 'RISK_PER_TRADE', 'Warns or blocks when planned risk exceeds the configured percentage of equity.', true, 'critical', 'block', 'risk', '{}'::jsonb, 'Trade blocked because planned risk per trade is too high.'),
 ('Revenge trading', 'REVENGE_TRADING', 'Detects same-symbol or larger-lot trades shortly after a loss.', true, 'critical', 'block', 'psychology', '{}'::jsonb, 'Trade blocked because it looks like revenge trading after a recent loss.')
 ON CONFLICT (code) DO NOTHING;
-
-INSERT INTO trades (
-    account_id, ticket, symbol, order_type, lot, entry_price, sl, tp, close_price, profit,
-    commission, swap, r_multiple, status, open_time, close_time, setup_name, emotion, mistake_tags, notes
-)
-SELECT id, '900001', 'XAUUSD', 'buy', 0.50, 2320.50000, 2312.50000, 2338.50000, 2332.50000, 450.00,
-       -3.50, 0.00, 1.50, 'closed', now() - interval '6 hours', now() - interval '5 hours',
-       'London breakout', 'calm', ARRAY['none'], 'Followed plan.'
-FROM accounts
-WHERE account_number = '100001'
-ON CONFLICT (account_id, ticket) DO NOTHING;
-
-INSERT INTO trades (
-    account_id, ticket, symbol, order_type, lot, entry_price, sl, tp, close_price, profit,
-    commission, swap, r_multiple, status, open_time, close_time, setup_name, emotion, mistake_tags, notes
-)
-SELECT id, '900002', 'EURUSD', 'sell', 1.00, 1.08450, 1.08750, 1.07850, 1.08750, -300.00,
-       -5.00, 0.00, -1.00, 'closed', now() - interval '3 hours', now() - interval '2 hours',
-       'NY reversal', 'frustrated', ARRAY['early-entry'], 'Entered before confirmation.'
-FROM accounts
-WHERE account_number = '100001'
-ON CONFLICT (account_id, ticket) DO NOTHING;
-
-INSERT INTO alerts (account_id, severity, type, message)
-SELECT id, 'warning', 'SAMPLE_ALERT', 'Seed alert: review risk rules before trading live.'
-FROM accounts
-WHERE account_number = '100001';
-
-INSERT INTO pre_trade_checks (account_id, symbol, order_type, lot, entry_price, sl, tp, allowed, reason, rule_codes, details)
-SELECT id, 'XAUUSD', 'BUY', 3.00, 2335.50000, NULL, 2350.00000, false, 'NO_STOP_LOSS', '["NO_STOP_LOSS", "MAX_LOT_SIZE"]'::jsonb, '{"violations": ["NO_STOP_LOSS", "MAX_LOT_SIZE"]}'::jsonb
-FROM accounts
-WHERE account_number = '100001';

@@ -1,4 +1,4 @@
-import type { Account, Alert, DailyReview, PreTradeCheck, RiskRule, Stats, Trade } from "./types";
+import type { Account, Alert, DailyReview, PreTradeCheck, RiskRule, RuleCatalog, RuleCatalogCreate, Stats, Trade } from "./types";
 
 const PUBLIC_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const API_BASE_URL = typeof window === "undefined"
@@ -35,6 +35,13 @@ export const api = {
   rules: () => request<RiskRule>("/api/rules"),
   updateRules: (payload: Omit<RiskRule, "id" | "account_id">) =>
     request<RiskRule>("/api/rules", { method: "PUT", body: JSON.stringify(payload) }),
+  ruleCatalog: () => request<RuleCatalog[]>("/api/rules/catalog"),
+  createRule: (payload: RuleCatalogCreate) =>
+    request<RuleCatalog>("/api/rules/catalog", { method: "POST", body: JSON.stringify(payload) }),
+  updateRuleCatalog: (code: string, payload: Partial<RuleCatalogCreate>) =>
+    request<RuleCatalog>(`/api/rules/catalog/${code}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteRuleCatalog: (code: string) =>
+    request<void>(`/api/rules/catalog/${code}`, { method: "DELETE" }),
   evaluateRules: () => request<{ status: string; allow_trading: boolean; alerts_created: string[] }>("/api/rules/evaluate", { method: "POST" }),
   preTradeChecks: (blockedOnly = true) => request<PreTradeCheck[]>(`/api/rules/pre-trade-checks?blocked_only=${blockedOnly}`),
   dailyReview: () => request<DailyReview | null>("/api/ai/daily-review"),
