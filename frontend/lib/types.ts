@@ -23,6 +23,8 @@ export type Stats = {
 export type Trade = {
   id: number;
   ticket: string;
+  deal_id: string | null;
+  position_id: string | null;
   symbol: string;
   order_type: string;
   lot: string;
@@ -35,6 +37,8 @@ export type Trade = {
   status: string;
   open_time: string | null;
   close_time: string | null;
+  source: string;
+  strategy: string | null;
   setup_name: string | null;
   emotion: string | null;
   mistake_tags: string[] | null;

@@ -21,6 +21,8 @@ class TradeEventIn(BaseModel):
     event_type: Literal["order_opened", "order_modified", "order_closed", "position_updated"]
     symbol: str = Field(min_length=1, max_length=32)
     ticket: str = Field(min_length=1, max_length=64)
+    deal_id: str | None = Field(default=None, max_length=64)
+    position_id: str | None = Field(default=None, max_length=64)
     order_type: str = Field(min_length=1, max_length=32)
     lot: Decimal = Field(ge=0)
     entry_price: Decimal | None = None
@@ -32,3 +34,6 @@ class TradeEventIn(BaseModel):
     swap: Decimal = Decimal("0")
     open_time: datetime | None = None
     close_time: datetime | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    source: str = Field(default="mt5", max_length=32)
+    strategy: str | None = Field(default=None, max_length=128)

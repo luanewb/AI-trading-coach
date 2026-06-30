@@ -8,6 +8,8 @@ class TradeOut(BaseModel):
     id: int
     account_id: int
     ticket: str
+    deal_id: str | None
+    position_id: str | None
     symbol: str
     order_type: str
     lot: Decimal
@@ -22,6 +24,8 @@ class TradeOut(BaseModel):
     status: str
     open_time: datetime | None
     close_time: datetime | None
+    source: str
+    strategy: str | None
     setup_name: str | None
     emotion: str | None
     mistake_tags: list[str] | None
