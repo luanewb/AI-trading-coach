@@ -16,8 +16,8 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 @router.get("/daily-review", response_model=DailyReviewOut | None)
-def latest_review(db: Session = Depends(get_db)) -> DailyReview | None:
-    account = current_account_or_404(db)
+def latest_review(db: Session = Depends(get_db), account_id: int | None = None) -> DailyReview | None:
+    account = current_account_or_404(db, account_id)
     return db.scalar(
         select(DailyReview)
         .where(DailyReview.account_id == account.id)
@@ -27,8 +27,8 @@ def latest_review(db: Session = Depends(get_db)) -> DailyReview | None:
 
 
 @router.post("/daily-review", response_model=DailyReviewOut)
-def create_daily_review(payload: DailyReviewRequest, db: Session = Depends(get_db)) -> DailyReview:
-    account = current_account_or_404(db)
+def create_daily_review(payload: DailyReviewRequest, db: Session = Depends(get_db), account_id: int | None = None) -> DailyReview:
+    account = current_account_or_404(db, account_id)
     review_date = payload.review_date or date.today()
     draft = build_daily_review(db, account, review_date)
     stats = calculate_stats(db, account.id)

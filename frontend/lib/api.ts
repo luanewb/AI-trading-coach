@@ -42,16 +42,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function queryString(params: Record<string, string | number | boolean | null | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
+function accountQuery(accountId?: number | null) {
+  return queryString({ account_id: accountId });
+}
+
 export const api = {
+  accounts: () => request<Account[]>("/api/accounts"),
   account: () => request<Account>("/api/accounts/current"),
-  stats: () => request<Stats>("/api/journal/stats"),
-  trades: (query = "") => request<Trade[]>(`/api/journal/trades${query}`),
-  updateTrade: (id: number, payload: Partial<Trade>) =>
-    request<Trade>(`/api/journal/trades/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  alerts: () => request<Alert[]>("/api/alerts"),
-  rules: () => request<RiskRule>("/api/rules"),
-  updateRules: (payload: Omit<RiskRule, "id" | "account_id">) =>
-    request<RiskRule>("/api/rules", { method: "PUT", body: JSON.stringify(payload) }),
+  stats: (accountId?: number | null) => request<Stats>(`/api/journal/stats${accountQuery(accountId)}`),
+  trades: (query = "", accountId?: number | null) => {
+    const params = new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
+    if (accountId !== null && accountId !== undefined) params.set("account_id", String(accountId));
+    const text = params.toString();
+    return request<Trade[]>(`/api/journal/trades${text ? `?${text}` : ""}`);
+  },
+  updateTrade: (id: number, payload: Partial<Trade>, accountId?: number | null) =>
+    request<Trade>(`/api/journal/trades/${id}${accountQuery(accountId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  alerts: (accountId?: number | null) => request<Alert[]>(`/api/alerts${accountQuery(accountId)}`),
+  rules: (accountId?: number | null) => request<RiskRule>(`/api/rules${accountQuery(accountId)}`),
+  updateRules: (payload: Omit<RiskRule, "id" | "account_id">, accountId?: number | null) =>
+    request<RiskRule>(`/api/rules${accountQuery(accountId)}`, { method: "PUT", body: JSON.stringify(payload) }),
   ruleCatalog: () => request<RuleCatalog[]>("/api/rules/catalog"),
   createRule: (payload: RuleCatalogCreate) =>
     request<RuleCatalog>("/api/rules/catalog", { method: "POST", body: JSON.stringify(payload) }),
@@ -59,15 +80,20 @@ export const api = {
     request<RuleCatalog>(`/api/rules/catalog/${code}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteRuleCatalog: (code: string) =>
     request<void>(`/api/rules/catalog/${code}`, { method: "DELETE" }),
-  evaluateRules: () => request<{ status: string; allow_trading: boolean; alerts_created: string[] }>("/api/rules/evaluate", { method: "POST" }),
-  preTradeChecks: (blockedOnly = true) => request<PreTradeCheck[]>(`/api/rules/pre-trade-checks?blocked_only=${blockedOnly}`),
-  riskSummary: () => request<RiskSummary>("/api/dashboard/risk-summary"),
-  riskActivity: (filter: RiskActivityFilter = "all") => request<RiskActivityItem[]>(`/api/dashboard/risk-activity?filter=${filter}`),
-  accountSnapshots: (range: SnapshotRange = "7d") => request<AccountSnapshotPoint[]>(`/api/dashboard/account-snapshots?range=${range}`),
-  preTradeHistory: () => request<PreTradeHistoryItem[]>("/api/dashboard/pre-trade-history"),
-  ruleIndicators: () => request<RuleIndicator[]>("/api/dashboard/rule-indicators"),
-  dailyReview: () => request<DailyReview | null>("/api/ai/daily-review"),
-  createDailyReview: () => request<DailyReview>("/api/ai/daily-review", { method: "POST", body: JSON.stringify({}) })
+  evaluateRules: (accountId?: number | null) =>
+    request<{ status: string; allow_trading: boolean; alerts_created: string[] }>(`/api/rules/evaluate${accountQuery(accountId)}`, { method: "POST" }),
+  preTradeChecks: (blockedOnly = true, accountId?: number | null) =>
+    request<PreTradeCheck[]>(`/api/rules/pre-trade-checks${queryString({ blocked_only: blockedOnly, account_id: accountId })}`),
+  riskSummary: (accountId?: number | null) => request<RiskSummary>(`/api/dashboard/risk-summary${accountQuery(accountId)}`),
+  riskActivity: (filter: RiskActivityFilter = "all", accountId?: number | null) =>
+    request<RiskActivityItem[]>(`/api/dashboard/risk-activity${queryString({ filter, account_id: accountId })}`),
+  accountSnapshots: (range: SnapshotRange = "7d", accountId?: number | null) =>
+    request<AccountSnapshotPoint[]>(`/api/dashboard/account-snapshots${queryString({ range, account_id: accountId })}`),
+  preTradeHistory: (accountId?: number | null) => request<PreTradeHistoryItem[]>(`/api/dashboard/pre-trade-history${accountQuery(accountId)}`),
+  ruleIndicators: (accountId?: number | null) => request<RuleIndicator[]>(`/api/dashboard/rule-indicators${accountQuery(accountId)}`),
+  dailyReview: (accountId?: number | null) => request<DailyReview | null>(`/api/ai/daily-review${accountQuery(accountId)}`),
+  createDailyReview: (accountId?: number | null) =>
+    request<DailyReview>(`/api/ai/daily-review${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({}) })
 };
 
 export { API_BASE_URL, PUBLIC_API_BASE_URL };

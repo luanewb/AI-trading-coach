@@ -17,6 +17,12 @@ router = APIRouter(prefix="/api/rules", tags=["rules"])
 logger = logging.getLogger(__name__)
 
 
+def _selected_account(db: Session, account_id: int | None) -> Account:
+    if account_id is None:
+        return current_account_or_404(db)
+    return current_account_or_404(db, account_id)
+
+
 def safe_block_response(reason: str, message: str, error_type: str | None = None) -> dict[str, object]:
     violation = {
         "rule_code": reason,
@@ -40,16 +46,16 @@ def safe_block_response(reason: str, message: str, error_type: str | None = None
 
 
 @router.get("", response_model=RiskRuleOut)
-def get_rules(db: Session = Depends(get_db)) -> RiskRule:
-    account = current_account_or_404(db)
+def get_rules(db: Session = Depends(get_db), account_id: int | None = None) -> RiskRule:
+    account = _selected_account(db, account_id)
     rule = get_or_create_rule(db, account)
     db.commit()
     return rule
 
 
 @router.put("", response_model=RiskRuleOut)
-def update_rules(payload: RiskRuleIn, db: Session = Depends(get_db)) -> RiskRule:
-    account = current_account_or_404(db)
+def update_rules(payload: RiskRuleIn, db: Session = Depends(get_db), account_id: int | None = None) -> RiskRule:
+    account = _selected_account(db, account_id)
     rule = get_or_create_rule(db, account)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
@@ -99,8 +105,8 @@ def delete_rule_catalog(code: str, db: Session = Depends(get_db)) -> Response:
 
 
 @router.post("/evaluate", response_model=RuleEvaluationOut)
-def evaluate(db: Session = Depends(get_db)) -> dict[str, object]:
-    account: Account = current_account_or_404(db)
+def evaluate(db: Session = Depends(get_db), account_id: int | None = None) -> dict[str, object]:
+    account: Account = _selected_account(db, account_id)
     result = evaluate_rules(db, account)
     db.commit()
     return result
@@ -157,8 +163,11 @@ def run_pre_close_check(payload: PreCloseCheckIn, db: Session = Depends(get_db))
 
 
 @router.get("/pre-trade-checks", response_model=list[PreTradeCheckHistoryOut])
-def list_pre_trade_checks(db: Session = Depends(get_db), blocked_only: bool = True) -> list[PreTradeCheck]:
+def list_pre_trade_checks(db: Session = Depends(get_db), blocked_only: bool = True, account_id: int | None = None) -> list[PreTradeCheck]:
     stmt = select(PreTradeCheck).order_by(PreTradeCheck.created_at.desc(), PreTradeCheck.id.desc()).limit(200)
+    if account_id is not None:
+        account = _selected_account(db, account_id)
+        stmt = stmt.where(PreTradeCheck.account_id == account.id)
     if blocked_only:
         stmt = stmt.where(PreTradeCheck.allowed.is_(False))
     return list(db.scalars(stmt))

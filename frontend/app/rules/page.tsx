@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, PlayCircle, Save, Trash2 } from "lucide-react";
+import { useSelectedAccount } from "@/components/AccountContext";
 import { api } from "@/lib/api";
 import type { RiskRule, RuleCatalog, RuleCatalogCreate, RuleIndicator } from "@/lib/types";
 
@@ -31,6 +32,7 @@ const emptyCatalogRule: RuleCatalogCreate = {
 const severityOptions: RuleCatalog["severity"][] = ["info", "warning", "critical"];
 const actionOptions: RuleCatalog["action"][] = ["allow", "warn", "block", "lock"];
 const categoryOptions: RuleCatalog["category"][] = ["risk", "behavior", "ftmo", "execution", "psychology"];
+const displayTimeZone = "Asia/Bangkok";
 const builtInRuleCodes = new Set([
   "PLATFORM_TRADING_ALLOWED",
   "NO_STOP_LOSS",
@@ -49,7 +51,7 @@ function dateTime(value: string | null) {
   if (!value) return "Never";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric", timeZone: displayTimeZone }).format(date);
 }
 
 function indicatorTone(state: string) {
@@ -59,6 +61,7 @@ function indicatorTone(state: string) {
 }
 
 export default function RulesPage() {
+  const { selectedAccountId, selectedAccount } = useSelectedAccount();
   const [rule, setRule] = useState(emptyRule);
   const [catalog, setCatalog] = useState<RuleCatalog[]>([]);
   const [indicators, setIndicators] = useState<RuleIndicator[]>([]);
@@ -68,7 +71,7 @@ export default function RulesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.allSettled([api.rules(), api.ruleCatalog(), api.ruleIndicators()])
+    Promise.allSettled([api.rules(selectedAccountId), api.ruleCatalog(), api.ruleIndicators(selectedAccountId)])
       .then(([rulesConfig, catalogResult, indicatorResult]) => {
         if (rulesConfig.status === "fulfilled") {
           const { id, account_id, ...data } = rulesConfig.value;
@@ -86,13 +89,13 @@ export default function RulesPage() {
         }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load rules"));
-  }, []);
+  }, [selectedAccountId]);
 
   async function save() {
     setStatus(null);
     setError(null);
     try {
-      await api.updateRules(rule);
+      await api.updateRules(rule, selectedAccountId);
       setStatus("Rules saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save rules");
@@ -103,7 +106,7 @@ export default function RulesPage() {
     setStatus(null);
     setError(null);
     try {
-      const result = await api.evaluateRules();
+      const result = await api.evaluateRules(selectedAccountId);
       setStatus(`Evaluation: ${result.status}. Alerts: ${result.alerts_created.join(", ") || "none"}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to evaluate rules");
@@ -166,6 +169,7 @@ export default function RulesPage() {
         <div>
           <p className="kicker">Rules</p>
           <h2 className="page-title">Risk configuration</h2>
+          {selectedAccount && <p className="mt-2 text-sm text-zinc-400">Account {selectedAccount.account_number}</p>}
         </div>
       </header>
 

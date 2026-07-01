@@ -64,7 +64,7 @@ function summarizeTradesByDay(trades: Trade[]) {
   return summaries;
 }
 
-export function TradingCalendar({ trades, activeMonth, basePath = "/calendar" }: { trades: Trade[]; activeMonth: Date; basePath?: string }) {
+export function TradingCalendar({ trades, activeMonth, accountId, basePath = "/calendar" }: { trades: Trade[]; activeMonth: Date; accountId?: number | null; basePath?: string }) {
   const daily = summarizeTradesByDay(trades);
   const monthStart = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1);
   const firstGridDate = new Date(monthStart);
@@ -80,18 +80,24 @@ export function TradingCalendar({ trades, activeMonth, basePath = "/calendar" }:
   const monthPnl = monthDays.reduce((sum, day) => sum + (daily.get(dateKey(day))?.pnl || 0), 0);
   const tradingDays = monthDays.filter((day) => (daily.get(dateKey(day))?.trades || 0) > 0).length;
   const label = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(monthStart);
+  const calendarHref = (month: string) => {
+    const params = new URLSearchParams();
+    params.set("month", month);
+    if (accountId) params.set("account_id", String(accountId));
+    return `${basePath}?${params.toString()}`;
+  };
 
   return (
     <section className="panel overflow-hidden p-4">
       <div className="flex flex-col gap-4 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Link className="secondary-action h-10 w-10 px-0" href={`${basePath}?month=${monthKey(addMonths(activeMonth, -1))}`} aria-label="Previous month">
+          <Link className="secondary-action h-10 w-10 px-0" href={calendarHref(monthKey(addMonths(activeMonth, -1)))} aria-label="Previous month">
             <ChevronLeft size={17} aria-hidden />
           </Link>
-          <Link className="secondary-action h-10 px-4" href={`${basePath}?month=${monthKey(new Date())}`}>
+          <Link className="secondary-action h-10 px-4" href={calendarHref(monthKey(new Date()))}>
             Today
           </Link>
-          <Link className="secondary-action h-10 w-10 px-0" href={`${basePath}?month=${monthKey(addMonths(activeMonth, 1))}`} aria-label="Next month">
+          <Link className="secondary-action h-10 w-10 px-0" href={calendarHref(monthKey(addMonths(activeMonth, 1)))} aria-label="Next month">
             <ChevronRight size={17} aria-hidden />
           </Link>
           <div className="ml-0 flex items-center gap-2 text-lg font-semibold text-zinc-50 sm:ml-4">

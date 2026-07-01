@@ -17,6 +17,8 @@ class PreTradeCheckIn(BaseModel):
     tp: Decimal | None = None
     risk_percent: Decimal | None = Field(default=None, ge=0)
     risk_amount: Decimal | None = Field(default=None, ge=0)
+    ema34: Decimal | None = None
+    ema89: Decimal | None = None
 
 
 class PreTradeCheckOut(BaseModel):

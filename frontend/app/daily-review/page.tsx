@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Bot, RefreshCw } from "lucide-react";
+import { useSelectedAccount } from "@/components/AccountContext";
 import { api } from "@/lib/api";
 import type { DailyReview } from "@/lib/types";
 
 export default function DailyReviewPage() {
+  const { selectedAccountId, selectedAccount } = useSelectedAccount();
   const [review, setReview] = useState<DailyReview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +15,7 @@ export default function DailyReviewPage() {
   async function load() {
     try {
       setError(null);
-      setReview(await api.dailyReview());
+      setReview(await api.dailyReview(selectedAccountId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load review");
     }
@@ -23,7 +25,7 @@ export default function DailyReviewPage() {
     setLoading(true);
     setError(null);
     try {
-      setReview(await api.createDailyReview());
+      setReview(await api.createDailyReview(selectedAccountId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create review");
     } finally {
@@ -33,7 +35,7 @@ export default function DailyReviewPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [selectedAccountId]);
 
   return (
     <div className="page-frame">
@@ -41,6 +43,7 @@ export default function DailyReviewPage() {
         <div>
           <p className="kicker">Daily Review</p>
           <h2 className="page-title">Coach report</h2>
+          {selectedAccount && <p className="mt-2 text-sm text-zinc-400">Account {selectedAccount.account_number}</p>}
         </div>
         <button className="primary-action" onClick={generate} disabled={loading}>
           <RefreshCw size={16} aria-hidden />

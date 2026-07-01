@@ -9,7 +9,7 @@ from app.models import Trade
 from app.schemas.journal import StatsOut, TradeOut, TradePatch
 from app.services.stats import calculate_stats
 from app.services.stats import executed_trade_filter
-from app.services.stats import get_current_account
+from app.services.stats import get_selected_account
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -17,12 +17,13 @@ router = APIRouter(prefix="/api/journal", tags=["journal"])
 @router.get("/trades", response_model=list[TradeOut])
 def list_trades(
     db: Session = Depends(get_db),
+    account_id: int | None = None,
     symbol: str | None = None,
     setup: str | None = None,
     result: str | None = Query(default=None, pattern="^(win|loss)$"),
     trade_date: date | None = None,
 ) -> list[Trade]:
-    account = get_current_account(db)
+    account = get_selected_account(db, account_id)
     if not account:
         return []
     stmt = (
@@ -46,8 +47,8 @@ def list_trades(
 
 
 @router.patch("/trades/{trade_id}", response_model=TradeOut)
-def update_trade(trade_id: int, payload: TradePatch, db: Session = Depends(get_db)) -> Trade:
-    account = get_current_account(db)
+def update_trade(trade_id: int, payload: TradePatch, db: Session = Depends(get_db), account_id: int | None = None) -> Trade:
+    account = get_selected_account(db, account_id)
     if not account:
         raise HTTPException(status_code=404, detail="No real MT5 account has been connected yet")
     trade = db.get(Trade, trade_id)
@@ -61,8 +62,8 @@ def update_trade(trade_id: int, payload: TradePatch, db: Session = Depends(get_d
 
 
 @router.get("/stats", response_model=StatsOut)
-def stats(db: Session = Depends(get_db)) -> dict[str, float | int]:
-    account = get_current_account(db)
+def stats(db: Session = Depends(get_db), account_id: int | None = None) -> dict[str, float | int]:
+    account = get_selected_account(db, account_id)
     if not account:
         return {
             "total_trades": 0,

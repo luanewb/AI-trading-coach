@@ -292,6 +292,39 @@ def test_pre_trade_evaluates_custom_catalog_rule(monkeypatch):
     assert result["violations"][0]["rule_code"] == "BLOCK_XAUUSD"
 
 
+def test_pre_trade_evaluates_custom_ema_fields(monkeypatch):
+    patch_stats(monkeypatch, stats())
+    monkeypatch.setattr(rule_engine, "latest_closed_trade", lambda _db, _account_id: None)
+    custom_rule = Rule(
+        id=101,
+        name="Block BUY EMA34 cross down EMA89",
+        code="BLOCK_BUY_EMA34_CROSS_DOWN_EMA89",
+        description="Block buys when EMA34 is below EMA89.",
+        enabled=True,
+        severity="critical",
+        action="block",
+        category="execution",
+        config={
+            "scope": "pre_trade",
+            "logic": "all",
+            "conditions": [
+                {"field": "order_type", "operator": "eq", "value": "BUY"},
+                {"field": "ema34", "operator": "lte", "value_from": "ema89"},
+            ],
+        },
+        message="Do not BUY because EMA34 is below EMA89.",
+    )
+    monkeypatch.setattr(rule_engine, "_rule_catalog", lambda _db: {"BLOCK_BUY_EMA34_CROSS_DOWN_EMA89": custom_rule})
+    db = FakeSession(rule())
+
+    result = rule_engine.pre_trade_check(db, account(), payload(ema34=Decimal("3980"), ema89=Decimal("3990")))
+
+    assert result["allowed"] is False
+    assert result["reason"] == "BLOCK_BUY_EMA34_CROSS_DOWN_EMA89"
+    assert result["violations"][0]["metadata"]["values"]["ema34"] == "3980"
+    assert result["violations"][0]["metadata"]["values"]["ema89"] == "3990"
+
+
 def test_evaluate_rules_creates_alert_for_open_trade_without_stop_loss(monkeypatch):
     patch_stats(monkeypatch, stats())
     monkeypatch.setattr(rule_engine, "latest_closed_trade", lambda _db, _account_id: None)

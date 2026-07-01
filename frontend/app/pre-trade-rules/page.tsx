@@ -1,17 +1,30 @@
 import { Ban, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { api } from "@/lib/api";
 
+const displayTimeZone = "Asia/Bangkok";
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: displayTimeZone
   }).format(new Date(value));
 }
 
-export default async function PreTradeRulesPage() {
-  const checks = await api.preTradeChecks(false).catch(() => []);
+type PreTradeSearchParams = Promise<{ account_id?: string | string[] }>;
+
+function parseAccountId(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export default async function PreTradeRulesPage({ searchParams }: { searchParams?: PreTradeSearchParams }) {
+  const params = searchParams ? await searchParams : {};
+  const accountId = parseAccountId(params.account_id);
+  const checks = await api.preTradeChecks(false, accountId).catch(() => []);
 
   return (
     <div className="page-frame">

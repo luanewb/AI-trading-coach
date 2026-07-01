@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, BookOpen, Bot, CalendarDays, ClipboardCheck, Gauge, ListChecks, ShieldCheck } from "lucide-react";
+import { AccountProvider, AccountSwitcher, useSelectedAccount } from "./AccountContext";
 
 const nav = [
   { href: "/", label: "Overview", icon: Gauge },
@@ -15,7 +16,16 @@ const nav = [
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <AccountProvider>
+      <ShellContent>{children}</ShellContent>
+    </AccountProvider>
+  );
+}
+
+function ShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { accountHref } = useSelectedAccount();
 
   return (
     <div className="min-h-[100dvh]">
@@ -29,17 +39,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-semibold text-zinc-50">Coach</h1>
           </div>
         </div>
-        <div className="mx-2 mt-6 rounded-xl border border-line bg-elevated p-3">
-          <p className="text-xs font-medium text-zinc-500">Session focus</p>
-          <p className="mt-1 text-sm font-semibold text-zinc-100">Protect capital before opportunity.</p>
-        </div>
+        <AccountSwitcher />
         <nav className="mt-6 space-y-1">
           {nav.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={accountHref(item.href)}
                 className={`flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${
                   active ? "bg-accent text-slate-950" : "text-zinc-400 hover:bg-elevated hover:text-zinc-50"
                 }`}
@@ -60,7 +67,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={accountHref(item.href)}
               className={`flex h-16 flex-col items-center justify-center gap-1 text-[10px] font-semibold transition ${active ? "text-accent" : "text-zinc-500"}`}
             >
               <item.icon size={17} aria-hidden />

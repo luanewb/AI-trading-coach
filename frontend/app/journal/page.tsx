@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Save, Search } from "lucide-react";
+import { useSelectedAccount } from "@/components/AccountContext";
 import { api } from "@/lib/api";
 import type { Trade } from "@/lib/types";
 
@@ -25,7 +26,12 @@ function normalizeScreenshotUrl(value: string | null | undefined) {
   return `https://${trimmed}`;
 }
 
+function normalizeMistakeTags(tags: string[] | null | undefined) {
+  return (tags || []).map((tag) => tag.trim()).filter(Boolean);
+}
+
 export default function JournalPage() {
+  const { selectedAccountId } = useSelectedAccount();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filters, setFilters] = useState({ symbol: "", setup: "", result: "", trade_date: "" });
   const [page, setPage] = useState(1);
@@ -44,7 +50,7 @@ export default function JournalPage() {
   async function load() {
     try {
       setError(null);
-      setTrades(await api.trades(query));
+      setTrades(await api.trades(query, selectedAccountId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load trades");
     }
@@ -53,7 +59,7 @@ export default function JournalPage() {
   useEffect(() => {
     setPage(1);
     void load();
-  }, [query]);
+  }, [query, selectedAccountId]);
 
   async function save(trade: Trade) {
     setSavingId(trade.id);
@@ -61,12 +67,12 @@ export default function JournalPage() {
       await api.updateTrade(trade.id, {
         setup_name: trade.setup_name,
         emotion: trade.emotion,
-        mistake_tags: trade.mistake_tags,
+        mistake_tags: normalizeMistakeTags(trade.mistake_tags),
         notes: trade.notes,
         before_entry_image_url: trade.before_entry_image_url,
         after_exit_image_url: trade.after_exit_image_url,
         analysis_image_url: trade.analysis_image_url
-      } as Partial<Trade>);
+      } as Partial<Trade>, selectedAccountId);
       await load();
     } finally {
       setSavingId(null);
@@ -142,8 +148,8 @@ export default function JournalPage() {
                 <td className="p-3">
                   <input
                     className="input-field h-9 w-44"
-                    value={(trade.mistake_tags || []).join(", ")}
-                    onChange={(event) => updateTrade(trade.id, { mistake_tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })}
+                    value={(trade.mistake_tags || []).join(",")}
+                    onChange={(event) => updateTrade(trade.id, { mistake_tags: event.target.value.split(",") })}
                   />
                 </td>
                 <td className="p-3"><textarea className="textarea-field h-16 w-56 resize-none" value={trade.notes ?? ""} onChange={(event) => updateTrade(trade.id, { notes: event.target.value })} /></td>

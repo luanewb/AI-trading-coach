@@ -7,8 +7,18 @@ function severityClass(severity: string) {
   return "bg-zinc-700/60 text-zinc-300";
 }
 
-export default async function AlertsPage() {
-  const alerts = await api.alerts().catch(() => []);
+type AlertsSearchParams = Promise<{ account_id?: string | string[] }>;
+
+function parseAccountId(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export default async function AlertsPage({ searchParams }: { searchParams?: AlertsSearchParams }) {
+  const params = searchParams ? await searchParams : {};
+  const accountId = parseAccountId(params.account_id);
+  const alerts = await api.alerts(accountId).catch(() => []);
 
   return (
     <div className="page-frame">

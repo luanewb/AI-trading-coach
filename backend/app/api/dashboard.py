@@ -28,6 +28,12 @@ from app.services.timezone import now_utc, trading_day_bounds
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+def _selected_account(db: Session, account_id: int | None):
+    if account_id is None:
+        return current_account_or_404(db)
+    return current_account_or_404(db, account_id)
+
+
 def _decimal(value: object) -> Decimal:
     return Decimal(str(value or 0))
 
@@ -151,8 +157,8 @@ def _matches_filter(item: RiskActivityItemOut, activity_filter: ActivityFilter) 
 
 
 @router.get("/risk-summary", response_model=RiskSummaryOut)
-def risk_summary(db: Session = Depends(get_db)) -> RiskSummaryOut:
-    account = current_account_or_404(db)
+def risk_summary(db: Session = Depends(get_db), account_id: int | None = None) -> RiskSummaryOut:
+    account = _selected_account(db, account_id)
     rule = _risk_rule_or_default(db, account.id)
     stats = calculate_stats(db, account.id)
     now = now_utc()
@@ -253,10 +259,11 @@ def risk_summary(db: Session = Depends(get_db)) -> RiskSummaryOut:
 @router.get("/risk-activity", response_model=list[RiskActivityItemOut])
 def risk_activity(
     db: Session = Depends(get_db),
+    account_id: int | None = None,
     filter: ActivityFilter = "all",
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[RiskActivityItemOut]:
-    account = current_account_or_404(db)
+    account = _selected_account(db, account_id)
     violation_rows = db.execute(
         select(RuleViolation, RuleEvaluation)
         .join(RuleEvaluation, RuleEvaluation.id == RuleViolation.evaluation_id)
@@ -322,10 +329,11 @@ def risk_activity(
 @router.get("/account-snapshots", response_model=list[AccountSnapshotPointOut])
 def account_snapshots(
     db: Session = Depends(get_db),
+    account_id: int | None = None,
     range: SnapshotRange = "7d",
     limit: int = Query(default=500, ge=1, le=2000),
 ) -> list[AccountSnapshotPointOut]:
-    account = current_account_or_404(db)
+    account = _selected_account(db, account_id)
     hours = {"24h": 24, "7d": 24 * 7, "30d": 24 * 30}[range]
     since = now_utc() - timedelta(hours=hours)
     snapshots = list(
@@ -360,9 +368,10 @@ def account_snapshots(
 @router.get("/pre-trade-history", response_model=list[PreTradeHistoryItemOut])
 def pre_trade_history(
     db: Session = Depends(get_db),
+    account_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[PreTradeHistoryItemOut]:
-    account = current_account_or_404(db)
+    account = _selected_account(db, account_id)
     checks = list(
         db.scalars(
             select(PreTradeCheck)
@@ -397,8 +406,8 @@ def pre_trade_history(
 
 
 @router.get("/rule-indicators", response_model=list[RuleIndicatorOut])
-def rule_indicators(db: Session = Depends(get_db)) -> list[RuleIndicatorOut]:
-    account = current_account_or_404(db)
+def rule_indicators(db: Session = Depends(get_db), account_id: int | None = None) -> list[RuleIndicatorOut]:
+    account = _selected_account(db, account_id)
     catalog = list(db.scalars(select(Rule).order_by(Rule.code)))
     day_start, day_end = trading_day_bounds()
     today_counts = {

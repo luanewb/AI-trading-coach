@@ -30,6 +30,24 @@ def real_account_filter():
     return not_(Account.account_number.in_(SEED_DEMO_ACCOUNT_NUMBERS))
 
 
+def list_real_accounts(db: Session) -> list[Account]:
+    return list(
+        db.scalars(
+            select(Account)
+            .where(real_account_filter())
+            .order_by(Account.updated_at.desc(), Account.id.desc())
+        )
+    )
+
+
+def get_account_by_id(db: Session, account_id: int) -> Account | None:
+    return db.scalar(
+        select(Account)
+        .where(Account.id == account_id, real_account_filter())
+        .limit(1)
+    )
+
+
 def get_current_account(db: Session) -> Account | None:
     return db.scalar(
         select(Account)
@@ -37,6 +55,12 @@ def get_current_account(db: Session) -> Account | None:
         .order_by(Account.updated_at.desc(), Account.id.desc())
         .limit(1)
     )
+
+
+def get_selected_account(db: Session, account_id: int | None = None) -> Account | None:
+    if account_id is not None:
+        return get_account_by_id(db, account_id)
+    return get_current_account(db)
 
 
 def count_consecutive_losses(trades: list[Trade]) -> int:

@@ -757,8 +757,10 @@ bool RunPreTradeCheck(string order_type, double lot, double entry_price, double 
    double risk_percent = (equity > 0.0 && risk_amount > 0.0 ? risk_amount / equity * 100.0 : 0.0);
    string risk_amount_json = (risk_amount > 0.0 ? DoubleToString(risk_amount, 2) : "null");
    string risk_percent_json = (risk_percent > 0.0 ? DoubleToString(risk_percent, 4) : "null");
+   double ema34 = MovingAverageValue(_Symbol, PERIOD_CURRENT, 34, 1);
+   double ema89 = MovingAverageValue(_Symbol, PERIOD_CURRENT, 89, 1);
    string json = StringFormat(
-      "{\"account_number\":\"%I64d\",\"symbol\":\"%s\",\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%s,\"sl\":%s,\"tp\":%s,\"risk_percent\":%s,\"risk_amount\":%s}",
+      "{\"account_number\":\"%I64d\",\"symbol\":\"%s\",\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%s,\"sl\":%s,\"tp\":%s,\"risk_percent\":%s,\"risk_amount\":%s,\"ema34\":%s,\"ema89\":%s}",
       AccountInfoInteger(ACCOUNT_LOGIN),
       JsonEscape(_Symbol),
       order_type,
@@ -767,7 +769,9 @@ bool RunPreTradeCheck(string order_type, double lot, double entry_price, double 
       sl_json,
       tp_json,
       risk_percent_json,
-      risk_amount_json
+      risk_amount_json,
+      JsonNumberOrNull(ema34, _Digits),
+      JsonNumberOrNull(ema89, _Digits)
    );
 
    string body = "";

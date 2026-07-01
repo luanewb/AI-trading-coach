@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.stats import get_current_account
+from app.services.stats import get_current_account, list_real_accounts
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -19,6 +19,11 @@ class AccountOut(BaseModel):
     free_margin: float
 
     model_config = {"from_attributes": True}
+
+
+@router.get("", response_model=list[AccountOut])
+def list_accounts(db: Session = Depends(get_db)):
+    return list_real_accounts(db)
 
 
 @router.get("/current", response_model=AccountOut)

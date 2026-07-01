@@ -393,6 +393,8 @@ def _custom_pre_trade_findings(catalog: dict[str, Rule], payload: PreTradeCheckI
             "tp": payload.tp,
             "risk_percent": payload.risk_percent,
             "risk_amount": payload.risk_amount,
+            "ema34": payload.ema34,
+            "ema89": payload.ema89,
         },
         "pre_trade",
     )
@@ -916,6 +918,8 @@ def pre_trade_check(db: Session, account: Account, payload: PreTradeCheckIn) -> 
                 "tp": payload.tp,
                 "risk_percent": payload.risk_percent,
                 "risk_amount": payload.risk_amount,
+                "ema34": payload.ema34,
+                "ema89": payload.ema89,
             }
         },
     )

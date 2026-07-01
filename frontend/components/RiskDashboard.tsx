@@ -41,6 +41,7 @@ type OverviewData = {
 
 const activityFilters: RiskActivityFilter[] = ["all", "warning", "blocked", "locked", "resolved"];
 const snapshotRanges: SnapshotRange[] = ["24h", "7d", "30d"];
+const displayTimeZone = "Asia/Bangkok";
 
 function money(value: number | string | null | undefined) {
   const amount = Number(value || 0);
@@ -56,7 +57,7 @@ function dateTime(value: string | null | undefined) {
   if (!value) return "Never";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: displayTimeZone }).format(date);
 }
 
 function statusTone(status: RiskSummary["trading_status"] | string) {
@@ -113,12 +114,17 @@ export function RiskDashboard({ initialData }: { initialData: OverviewData }) {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [expandedCheck, setExpandedCheck] = useState<number | null>(null);
+  const accountId = initialData.account?.id ?? initialData.summary?.account_id ?? null;
+
+  useEffect(() => {
+    setSnapshots(initialData.snapshots);
+  }, [accountId, initialData.snapshots]);
 
   useEffect(() => {
     let mounted = true;
     setSnapshotLoading(true);
     setSnapshotError(null);
-    api.accountSnapshots(snapshotRange)
+    api.accountSnapshots(snapshotRange, accountId)
       .then((points) => {
         if (mounted) setSnapshots(points);
       })
@@ -131,7 +137,7 @@ export function RiskDashboard({ initialData }: { initialData: OverviewData }) {
     return () => {
       mounted = false;
     };
-  }, [snapshotRange]);
+  }, [snapshotRange, accountId]);
 
   const filteredActivity = useMemo(() => filterActivity(initialData.activity, activityFilter), [initialData.activity, activityFilter]);
   const summary = initialData.summary;
