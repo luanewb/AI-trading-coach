@@ -100,6 +100,54 @@ export type DailyReview = {
   best_trade: string | null;
   worst_trade: string | null;
   action_plan: string | null;
+  metrics_snapshot: {
+    total_trades?: number;
+    wins?: number;
+    losses?: number;
+    win_rate?: number;
+    realized_pnl?: string;
+    average_winner?: string | null;
+    average_loser?: string | null;
+    profit_factor?: number | null;
+    average_r_multiple?: number | null;
+    max_consecutive_losses?: number;
+    rule_violations?: {
+      total?: number;
+      by_code?: Array<{ name: string; count: number }>;
+      items?: Array<{ rule_code: string; severity: string; action: string; message: string; created_at: string | null }>;
+    };
+    blocked_pre_trade_attempts?: number;
+    pre_trade_attempts?: number;
+    most_traded_symbols?: Array<{ name: string; count: number }>;
+    setups_used?: Array<{ name: string; count: number }>;
+    emotions?: Array<{ name: string; count: number }>;
+    mistakes?: Array<{ name: string; count: number }>;
+    journal?: {
+      missing?: Record<string, number>;
+      incomplete_trade_count?: number;
+    };
+  };
+  discipline_score: number;
+  discipline_breakdown: Array<{ code: string; label: string; observed: number; penalty: number; reason: string }>;
+  deterministic_findings: {
+    facts?: string[];
+    positive_behaviors?: string[];
+    risk_patterns?: string[];
+    tomorrows_plan?: string[];
+    strongest_positive_behavior?: string;
+    biggest_mistake_or_risk_pattern?: string;
+    score_interpretation?: string;
+    disclaimer?: string;
+  };
+  ai_narrative: string | null;
+  model_metadata: {
+    ai_enabled?: boolean;
+    model?: string;
+    provider?: string;
+    fallback_reason?: string;
+  };
+  generated_at: string | null;
+  created_at: string;
 };
 
 export type PreTradeCheck = {

@@ -238,6 +238,10 @@ class PreTradeCheck(Base):
 
 class DailyReview(Base):
     __tablename__ = "daily_reviews"
+    __table_args__ = (
+        UniqueConstraint("account_id", "review_date", name="uq_daily_reviews_account_date"),
+        Index("idx_daily_reviews_account_date", "account_id", "review_date"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
@@ -250,6 +254,13 @@ class DailyReview(Base):
     best_trade: Mapped[str | None] = mapped_column(Text)
     worst_trade: Mapped[str | None] = mapped_column(Text)
     action_plan: Mapped[str | None] = mapped_column(Text)
+    metrics_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    discipline_score: Mapped[int] = mapped_column(Integer, default=100)
+    discipline_breakdown: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    deterministic_findings: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    ai_narrative: Mapped[str | None] = mapped_column(Text)
+    model_metadata: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

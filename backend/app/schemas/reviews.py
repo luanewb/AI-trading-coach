@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,13 @@ class DailyReviewOut(BaseModel):
     best_trade: str | None
     worst_trade: str | None
     action_plan: str | None
+    metrics_snapshot: dict[str, Any] = Field(default_factory=dict)
+    discipline_score: int = 100
+    discipline_breakdown: list[dict[str, Any]] = Field(default_factory=list)
+    deterministic_findings: dict[str, Any] = Field(default_factory=dict)
+    ai_narrative: str | None = None
+    model_metadata: dict[str, Any] = Field(default_factory=dict)
+    generated_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

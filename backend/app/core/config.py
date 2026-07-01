@@ -7,8 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str = Field(default="postgresql+psycopg://trading:trading@postgres:5432/tradingcoach")
     redis_url: str = Field(default="redis://redis:6379/0")
+    ai_provider: str = "openai"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
     enable_ai: bool = False
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None

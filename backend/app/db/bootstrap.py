@@ -14,6 +14,20 @@ SCHEMA_STATEMENTS = [
     "ALTER TABLE trades ADD COLUMN IF NOT EXISTS analysis_image_url TEXT",
     "ALTER TABLE pre_trade_checks ADD COLUMN IF NOT EXISTS rule_codes JSONB NOT NULL DEFAULT '[]'::jsonb",
     "ALTER TABLE pre_trade_checks ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS metrics_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS discipline_score INTEGER NOT NULL DEFAULT 100",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS discipline_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS deterministic_findings JSONB NOT NULL DEFAULT '{}'::jsonb",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS ai_narrative TEXT",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS model_metadata JSONB NOT NULL DEFAULT '{}'::jsonb",
+    "ALTER TABLE daily_reviews ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+    """
+    DELETE FROM daily_reviews older
+    USING daily_reviews newer
+    WHERE older.account_id = newer.account_id
+      AND older.review_date = newer.review_date
+      AND older.id < newer.id
+    """,
     """
     CREATE TABLE IF NOT EXISTS rules (
         id SERIAL PRIMARY KEY,
@@ -63,6 +77,19 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_rules_code ON rules(code)",
     "CREATE INDEX IF NOT EXISTS idx_rule_evaluations_account_checked_at ON rule_evaluations(account_id, checked_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_rule_violations_rule_code ON rule_violations(rule_code)",
+    "CREATE INDEX IF NOT EXISTS idx_daily_reviews_account_date ON daily_reviews(account_id, review_date)",
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_daily_reviews_account_date'
+        ) THEN
+            ALTER TABLE daily_reviews
+            ADD CONSTRAINT uq_daily_reviews_account_date UNIQUE (account_id, review_date);
+        END IF;
+    END
+    $$;
+    """,
 ]
 
 

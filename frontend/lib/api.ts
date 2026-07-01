@@ -91,9 +91,14 @@ export const api = {
     request<AccountSnapshotPoint[]>(`/api/dashboard/account-snapshots${queryString({ range, account_id: accountId })}`),
   preTradeHistory: (accountId?: number | null) => request<PreTradeHistoryItem[]>(`/api/dashboard/pre-trade-history${accountQuery(accountId)}`),
   ruleIndicators: (accountId?: number | null) => request<RuleIndicator[]>(`/api/dashboard/rule-indicators${accountQuery(accountId)}`),
-  dailyReview: (accountId?: number | null) => request<DailyReview | null>(`/api/ai/daily-review${accountQuery(accountId)}`),
-  createDailyReview: (accountId?: number | null) =>
-    request<DailyReview>(`/api/ai/daily-review${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({}) })
+  dailyReview: (accountId?: number | null, reviewDate?: string | null) =>
+    request<DailyReview | null>(`/api/ai/daily-review${queryString({ account_id: accountId, review_date: reviewDate })}`),
+  dailyReviewHistory: (accountId?: number | null) =>
+    request<DailyReview[]>(`/api/ai/daily-review/history${accountQuery(accountId)}`),
+  createDailyReview: (accountId?: number | null, reviewDate?: string | null) =>
+    request<DailyReview>(`/api/ai/daily-review${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({ review_date: reviewDate }) }),
+  regenerateDailyReview: (accountId?: number | null, reviewDate?: string | null) =>
+    request<DailyReview>(`/api/ai/daily-review/regenerate${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({ review_date: reviewDate }) })
 };
 
 export { API_BASE_URL, PUBLIC_API_BASE_URL };
