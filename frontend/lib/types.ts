@@ -20,6 +20,91 @@ export type Stats = {
   consecutive_losses: number;
 };
 
+export type AnalyticsDateRangeQuery = {
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
+export type AnalyticsConfidence = {
+  code: "insufficient_sample" | "early_signal" | "meaningful_sample";
+  label: string;
+  sample_size: number;
+};
+
+export type AnalyticsMetrics = {
+  total_closed_trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  win_rate: number;
+  total_realized_pnl: number;
+  gross_profit: number;
+  gross_loss: number;
+  profit_factor: number | null;
+  expectancy: number;
+  average_winner: number | null;
+  average_loser: number | null;
+  average_r_multiple: number | null;
+  r_multiple_count: number;
+  best_r_multiple: number | null;
+  worst_r_multiple: number | null;
+  average_holding_minutes: number | null;
+  max_consecutive_wins: number;
+  max_consecutive_losses: number;
+  confidence: AnalyticsConfidence;
+};
+
+export type EquityCurvePoint = {
+  date: string;
+  cumulative_pnl: number;
+  trade_count: number;
+};
+
+export type AnalyticsOverview = {
+  account_id: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  no_data: boolean;
+  metrics: AnalyticsMetrics;
+  equity_curve: EquityCurvePoint[];
+};
+
+export type AnalyticsBreakdownRow = {
+  group_by: string;
+  key: string;
+  label: string;
+  metrics: AnalyticsMetrics;
+};
+
+export type AnalyticsBreakdown = {
+  account_id: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  group_by: string;
+  rows: AnalyticsBreakdownRow[];
+  missing_journal_count: number;
+};
+
+export type AnalyticsInsight = {
+  tone: "edge" | "leak" | "info";
+  title: string;
+  observation: string;
+  group_by: string | null;
+  key: string | null;
+  sample_size: number;
+  confidence: AnalyticsConfidence | null;
+  metric_name: string | null;
+  metric_value: number | null;
+  supported: boolean;
+};
+
+export type AnalyticsInsights = {
+  account_id: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  insights: AnalyticsInsight[];
+};
+
 export type Trade = {
   id: number;
   ticket: string;

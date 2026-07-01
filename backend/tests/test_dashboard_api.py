@@ -69,6 +69,20 @@ def rule(**overrides) -> RiskRule:
     return RiskRule(**values)
 
 
+def test_downsample_snapshots_keeps_latest_point():
+    base_time = datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc)
+    snapshots = [
+        AccountSnapshot(id=index + 1, account_id=1, balance=Decimal("100000") + index, equity=Decimal("100000") + index, timestamp=base_time + timedelta(minutes=index))
+        for index in range(100)
+    ]
+
+    sampled = dashboard_api._downsample_snapshots(snapshots, 10)
+
+    assert len(sampled) == 10
+    assert sampled[0].id == 1
+    assert sampled[-1].id == 100
+
+
 def client_with_db(db):
     def override_db():
         yield db

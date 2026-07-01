@@ -408,9 +408,9 @@ function SnapshotChart({
   loading: boolean;
   error: string | null;
 }) {
-  const width = 780;
+  const width = 840;
   const height = 320;
-  const padding = { top: 26, right: 24, bottom: 42, left: 64 };
+  const padding = { top: 26, right: 24, bottom: 42, left: 112 };
   const values = points.flatMap((point) => [Number(point.balance), Number(point.equity)]);
   const minValue = values.length ? Math.min(...values) : 0;
   const maxValue = values.length ? Math.max(...values) : 1;
@@ -444,7 +444,7 @@ function SnapshotChart({
         {error && <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-sm text-warn">{error}</p>}
         {points.length > 1 ? (
           <div className="overflow-x-auto">
-            <svg className="min-w-[780px]" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Balance and equity chart">
+            <svg className="min-w-[840px]" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Balance and equity chart">
               {ticks.map((tick) => (
                 <g key={tick}>
                   <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} stroke="#263142" strokeWidth="1" />

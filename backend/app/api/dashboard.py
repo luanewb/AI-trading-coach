@@ -94,6 +94,17 @@ def _risk_rule_or_default(db: Session, account_id: int) -> RiskRule:
     )
 
 
+def _downsample_snapshots(snapshots: list[AccountSnapshot], limit: int) -> list[AccountSnapshot]:
+    if len(snapshots) <= limit:
+        return snapshots
+    if limit <= 1:
+        return snapshots[-1:]
+    last_index = len(snapshots) - 1
+    indexes = {round(index * last_index / (limit - 1)) for index in range(limit)}
+    indexes.add(last_index)
+    return [snapshots[index] for index in sorted(indexes)]
+
+
 def _cooldown_until(db: Session, account_id: int, minutes: int):
     if minutes <= 0:
         return None
@@ -341,9 +352,9 @@ def account_snapshots(
             select(AccountSnapshot)
             .where(AccountSnapshot.account_id == account.id, AccountSnapshot.timestamp >= since)
             .order_by(AccountSnapshot.timestamp.asc(), AccountSnapshot.id.asc())
-            .limit(limit)
         )
     )
+    snapshots = _downsample_snapshots(snapshots, limit)
 
     peak = Decimal("0")
     points: list[AccountSnapshotPointOut] = []

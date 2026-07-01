@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, BookOpen, Bot, CalendarDays, ClipboardCheck, Gauge, ListChecks, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Bot, CalendarDays, ClipboardCheck, Gauge, ListChecks, ShieldCheck } from "lucide-react";
 import { AccountProvider, AccountSwitcher, useSelectedAccount } from "./AccountContext";
 
 const nav = [
   { href: "/", label: "Overview", icon: Gauge },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/journal", label: "Journal", icon: BookOpen },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/rules", label: "Rules", icon: ShieldCheck },
@@ -61,7 +62,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
       <main className="lg:pl-72">
         <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">{children}</div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-7 border-t border-line bg-paper/95 backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-8 border-t border-line bg-paper/95 backdrop-blur lg:hidden">
         {nav.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (

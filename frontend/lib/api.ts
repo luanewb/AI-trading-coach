@@ -1,6 +1,10 @@
 import type {
   Account,
   AccountSnapshotPoint,
+  AnalyticsBreakdown,
+  AnalyticsDateRangeQuery,
+  AnalyticsInsights,
+  AnalyticsOverview,
   Alert,
   DailyReview,
   PreTradeCheck,
@@ -57,6 +61,15 @@ function accountQuery(accountId?: number | null) {
   return queryString({ account_id: accountId });
 }
 
+function analyticsQuery(accountId?: number | null, range?: AnalyticsDateRangeQuery, extra?: Record<string, string | number | boolean | null | undefined>) {
+  return queryString({
+    account_id: accountId,
+    start_date: range?.start_date,
+    end_date: range?.end_date,
+    ...(extra || {})
+  });
+}
+
 export const api = {
   accounts: () => request<Account[]>("/api/accounts"),
   account: () => request<Account>("/api/accounts/current"),
@@ -98,7 +111,13 @@ export const api = {
   createDailyReview: (accountId?: number | null, reviewDate?: string | null) =>
     request<DailyReview>(`/api/ai/daily-review${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({ review_date: reviewDate }) }),
   regenerateDailyReview: (accountId?: number | null, reviewDate?: string | null) =>
-    request<DailyReview>(`/api/ai/daily-review/regenerate${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({ review_date: reviewDate }) })
+    request<DailyReview>(`/api/ai/daily-review/regenerate${accountQuery(accountId)}`, { method: "POST", body: JSON.stringify({ review_date: reviewDate }) }),
+  analyticsOverview: (accountId?: number | null, range?: AnalyticsDateRangeQuery) =>
+    request<AnalyticsOverview>(`/api/analytics/overview${analyticsQuery(accountId, range)}`),
+  analyticsBreakdown: (groupBy: string, accountId?: number | null, range?: AnalyticsDateRangeQuery) =>
+    request<AnalyticsBreakdown>(`/api/analytics/breakdown${analyticsQuery(accountId, range, { group_by: groupBy })}`),
+  analyticsInsights: (accountId?: number | null, range?: AnalyticsDateRangeQuery) =>
+    request<AnalyticsInsights>(`/api/analytics/insights${analyticsQuery(accountId, range)}`)
 };
 
 export { API_BASE_URL, PUBLIC_API_BASE_URL };

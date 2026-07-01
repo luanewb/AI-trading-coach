@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import accounts, ai, alerts, dashboard, journal, mt5, rules
+from app.api import accounts, ai, alerts, analytics, dashboard, journal, mt5, rules
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.bootstrap import bootstrap_database
@@ -27,6 +27,7 @@ app.include_router(rules.router)
 app.include_router(dashboard.router)
 app.include_router(alerts.router)
 app.include_router(ai.router)
+app.include_router(analytics.router)
 
 
 @app.on_event("startup")

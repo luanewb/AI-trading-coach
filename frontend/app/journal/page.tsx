@@ -19,6 +19,14 @@ function formatOrderType(value: string) {
   return value.replace(/^ORDER_TYPE_/i, "").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
+function formatR(value: string | number | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value);
+  const rounded = Math.sign(numeric) * Math.round(Math.abs(numeric) * 2) / 2;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 function normalizeScreenshotUrl(value: string | null | undefined) {
   const trimmed = (value || "").trim();
   if (!trimmed) return "";
@@ -142,7 +150,7 @@ export default function JournalPage() {
                 <td className="p-3">{formatOrderType(trade.order_type)}</td>
                 <td className="p-3 tabular-nums">{trade.lot}</td>
                 <td className={`p-3 font-semibold ${Number(trade.profit) >= 0 ? "text-good" : "text-bad"}`}>{formatMoney(trade.profit)}</td>
-                <td className="p-3 tabular-nums">{trade.r_multiple ?? "-"}</td>
+                <td className="p-3 tabular-nums">{formatR(trade.r_multiple)}</td>
                 <td className="p-3"><input className="input-field h-9 w-36" value={trade.setup_name ?? ""} onChange={(event) => updateTrade(trade.id, { setup_name: event.target.value })} /></td>
                 <td className="p-3"><input className="input-field h-9 w-32" value={trade.emotion ?? ""} onChange={(event) => updateTrade(trade.id, { emotion: event.target.value })} /></td>
                 <td className="p-3">
