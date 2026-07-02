@@ -443,8 +443,8 @@ function SnapshotChart({
         {loading && <p className="mb-3 text-sm text-zinc-400">Loading snapshot history...</p>}
         {error && <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-sm text-warn">{error}</p>}
         {points.length > 1 ? (
-          <div className="overflow-x-auto">
-            <svg className="min-w-[840px]" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Balance and equity chart">
+          <div className="w-full">
+            <svg className="h-auto w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Balance and equity chart">
               {ticks.map((tick) => (
                 <g key={tick}>
                   <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} stroke="#263142" strokeWidth="1" />
@@ -455,11 +455,15 @@ function SnapshotChart({
               ))}
               <path d={path("balance")} fill="none" stroke="#38BDF8" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
               <path d={path("equity")} fill="none" stroke="#2DD4BF" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-              {points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 4) === 0).map((point, index) => (
-                <text key={`${point.id}-${point.timestamp}`} x={x(points.indexOf(point))} y={height - 16} textAnchor={index === 0 ? "start" : "middle"} className="fill-zinc-500 text-xs">
-                  {dateTime(point.timestamp)}
-                </text>
-              ))}
+              {points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 4) === 0).map((point) => {
+                const pointIndex = points.indexOf(point);
+                const anchor = pointIndex === 0 ? "start" : pointIndex === points.length - 1 ? "end" : "middle";
+                return (
+                  <text key={`${point.id}-${point.timestamp}`} x={x(pointIndex)} y={height - 16} textAnchor={anchor} className="fill-zinc-500 text-xs">
+                    {dateTime(point.timestamp)}
+                  </text>
+                );
+              })}
             </svg>
           </div>
         ) : (

@@ -20,6 +20,9 @@ input double DefaultRiskPercent = 1.0;
 input double DefaultRR = 2.0;
 input string OrderHotkey = "t";
 input ulong MagicNumber = 260629;
+input bool SyncHistoryOnReconnect = true;
+input int HistorySyncLookbackHours = 72;
+input int HistorySyncIntervalSeconds = 60;
 
 CTrade Trade;
 
@@ -46,6 +49,7 @@ bool LastHttpConnectivityError = false;
 string PlanDirection = "BUY";
 bool AutoTPEnabled = true;
 ulong LastClickTick = 0;
+datetime LastHistorySyncAt = 0;
 
 string NormalizeBaseUrl(string url)
 {
@@ -82,6 +86,13 @@ string JsonNumberOrNull(double value, int digits = 5)
    if(value == EMPTY_VALUE || !MathIsValidNumber(value))
       return "null";
    return DoubleToString(value, digits);
+}
+
+string JsonTicketOrNull(ulong value)
+{
+   if(value == 0)
+      return "null";
+   return "\"" + IntegerToString((long)value) + "\"";
 }
 
 string IsoTime(datetime value)
@@ -379,6 +390,113 @@ void SendTradeEvent(const MqlTradeTransaction &trans, const MqlTradeRequest &req
    );
 
    SendJsonToBackend("/api/mt5/trade-event", json);
+}
+
+string EventTypeFromDealEntry(long entry)
+{
+   if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY)
+      return "order_closed";
+   if(entry == DEAL_ENTRY_IN || entry == DEAL_ENTRY_INOUT)
+      return "order_opened";
+   return "";
+}
+
+string OrderTypeFromDealType(long deal_type)
+{
+   if(deal_type == DEAL_TYPE_SELL)
+      return "ORDER_TYPE_SELL";
+   if(deal_type == DEAL_TYPE_BUY)
+      return "ORDER_TYPE_BUY";
+   return "";
+}
+
+bool SendHistoryDealEvent(ulong deal_ticket)
+{
+   if(deal_ticket == 0 || !HistoryDealSelect(deal_ticket))
+      return false;
+
+   long entry = HistoryDealGetInteger(deal_ticket, DEAL_ENTRY);
+   string event_type = EventTypeFromDealEntry(entry);
+   if(event_type == "")
+      return false;
+
+   long deal_type = HistoryDealGetInteger(deal_ticket, DEAL_TYPE);
+   string order_type = OrderTypeFromDealType(deal_type);
+   if(order_type == "")
+      return false;
+
+   string symbol = HistoryDealGetString(deal_ticket, DEAL_SYMBOL);
+   if(symbol == "")
+      return false;
+
+   ulong order_ticket = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_ORDER);
+   ulong position_id = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_POSITION_ID);
+   ulong trade_ticket = (position_id > 0 ? position_id : (order_ticket > 0 ? order_ticket : deal_ticket));
+   datetime deal_time = (datetime)HistoryDealGetInteger(deal_ticket, DEAL_TIME);
+   double price = HistoryDealGetDouble(deal_ticket, DEAL_PRICE);
+   double sl = 0.0;
+   double tp = 0.0;
+   if(order_ticket > 0 && HistoryOrderSelect(order_ticket))
+   {
+      sl = HistoryOrderGetDouble(order_ticket, ORDER_SL);
+      tp = HistoryOrderGetDouble(order_ticket, ORDER_TP);
+   }
+
+   string close_time_json = (event_type == "order_closed" ? "\"" + IsoTime(deal_time) + "\"" : "null");
+   string close_price_json = (event_type == "order_closed" ? DoubleToString(price, 5) : "null");
+   string json = StringFormat(
+      "{\"account_number\":\"%I64d\",\"event_type\":\"%s\",\"symbol\":\"%s\",\"ticket\":\"%I64u\",\"deal_id\":%s,\"position_id\":%s,\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%.5f,\"sl\":%s,\"tp\":%s,\"close_price\":%s,\"profit\":%.2f,\"commission\":%.2f,\"swap\":%.2f,\"open_time\":\"%s\",\"close_time\":%s,\"source\":\"mt5-history\"}",
+      AccountInfoInteger(ACCOUNT_LOGIN),
+      event_type,
+      JsonEscape(symbol),
+      trade_ticket,
+      JsonTicketOrNull(deal_ticket),
+      JsonTicketOrNull(position_id),
+      JsonEscape(order_type),
+      HistoryDealGetDouble(deal_ticket, DEAL_VOLUME),
+      price,
+      (sl > 0.0 ? DoubleToString(sl, 5) : "null"),
+      (tp > 0.0 ? DoubleToString(tp, 5) : "null"),
+      close_price_json,
+      HistoryDealGetDouble(deal_ticket, DEAL_PROFIT),
+      HistoryDealGetDouble(deal_ticket, DEAL_COMMISSION),
+      HistoryDealGetDouble(deal_ticket, DEAL_SWAP),
+      IsoTime(deal_time),
+      close_time_json
+   );
+
+   return SendJsonToBackend("/api/mt5/trade-event", json);
+}
+
+void SyncRecentTradeHistory()
+{
+   if(!SyncHistoryOnReconnect)
+      return;
+
+   datetime now = TimeCurrent();
+   datetime from = now - MathMax(1, HistorySyncLookbackHours) * 3600;
+   if(LastHistorySyncAt > 0)
+      from = LastHistorySyncAt - 300;
+   if(from < 0)
+      from = 0;
+
+   if(!HistorySelect(from, now))
+   {
+      PrintFormat("AITradingCoach history sync failed. from=%s to=%s error=%d", IsoTime(from), IsoTime(now), GetLastError());
+      return;
+   }
+
+   int sent = 0;
+   int total = HistoryDealsTotal();
+   for(int index = 0; index < total; index++)
+   {
+      ulong deal_ticket = HistoryDealGetTicket(index);
+      if(SendHistoryDealEvent(deal_ticket))
+         sent++;
+   }
+
+   LastHistorySyncAt = now;
+   PrintFormat("AITradingCoach history sync completed. Deals scanned=%d sent=%d from=%s to=%s", total, sent, IsoTime(from), IsoTime(now));
 }
 
 void SetStatus(string message, color text_color = clrWhite)
@@ -1032,6 +1150,7 @@ int OnInit()
    EventSetTimer(MathMax(1, SendIntervalSeconds));
    Print("AITradingCoach connector started. Remember to whitelist BackendURL in MT5 WebRequest settings.");
    SendHeartbeat();
+   SyncRecentTradeHistory();
    return INIT_SUCCEEDED;
 }
 
@@ -1045,6 +1164,8 @@ void OnDeinit(const int reason)
 void OnTimer()
 {
    SendHeartbeat();
+   if(SyncHistoryOnReconnect && (LastHistorySyncAt == 0 || TimeCurrent() - LastHistorySyncAt >= MathMax(10, HistorySyncIntervalSeconds)))
+      SyncRecentTradeHistory();
 }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result)

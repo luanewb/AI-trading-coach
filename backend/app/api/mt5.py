@@ -49,7 +49,7 @@ def _event_key(account_id: int, payload: TradeEventIn) -> str:
     return "|".join(parts)
 
 
-def _upsert_trade_event(db: Session, account_id: int, payload: TradeEventIn, trade_id: int | None = None) -> TradeEvent:
+def _upsert_trade_event(db: Session, account_id: int, payload: TradeEventIn, trade_id: int | None = None) -> tuple[TradeEvent, bool]:
     event_key = _event_key(account_id, payload)
     event = db.scalar(select(TradeEvent).where(TradeEvent.event_key == event_key))
     if not event:
@@ -77,9 +77,10 @@ def _upsert_trade_event(db: Session, account_id: int, payload: TradeEventIn, tra
             payload=_jsonable(payload.model_dump()),
         )
         db.add(event)
+        return event, True
     elif trade_id:
         event.trade_id = trade_id
-    return event
+    return event, False
 
 
 def _calculate_r_multiple(trade: Trade) -> Decimal | None:
@@ -241,7 +242,11 @@ def receive_trade_event(payload: TradeEventIn, db: Session = Depends(get_db)) ->
     db.flush()
     trade.r_multiple = _calculate_r_multiple(trade)
 
-    _upsert_trade_event(db, account.id, payload, trade.id)
+    _event, created_event = _upsert_trade_event(db, account.id, payload, trade.id)
+    if not created_event:
+        db.commit()
+        logger.info("Duplicate trade event %s ignored for ticket %s", payload.event_type, payload.ticket)
+        return {"ok": True, "duplicate": True, "trade_id": trade.id}
 
     result = evaluate_rules(db, account, trade)
     db.commit()
