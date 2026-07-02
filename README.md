@@ -179,6 +179,35 @@ Available rule codes:
 - `MAX_LOT_SIZE`: blocks lot size above `max_lot`.
 - `RISK_PER_TRADE`: blocks planned trade risk above `max_risk_per_trade_percent`.
 - `REVENGE_TRADING`: blocks same-symbol or larger-lot trade attempts shortly after a loss.
+- `NEWS_RESTRICTED_WINDOW`: warns or blocks USD-sensitive trading actions during configured FTMO restricted news windows.
+
+## FTMO Restricted News Events
+
+The News Restrictions module stores USD restricted events in UTC, displays them in the dashboard, and enforces the active restricted window in the backend trade guard. The default profile is an FTMO Standard Funded account with a 2 minute window before and after restricted USD events.
+
+Provider configuration:
+
+- `NEWS_RESTRICTIONS_PROVIDER=mock` uses the local development provider and does not fetch external data.
+- `NEWS_RESTRICTIONS_PROVIDER=ftmo` uses `NEWS_RESTRICTIONS_FTMO_CALENDAR_URL` when a stable FTMO calendar endpoint is available.
+- `NEWS_RESTRICTIONS_PROVIDER=fallback` uses `NEWS_RESTRICTIONS_FALLBACK_URL` for a configurable economic calendar API.
+- `NEWS_RESTRICTIONS_API_KEY` and `NEWS_RESTRICTIONS_API_KEY_HEADER` are optional for HTTP providers. Do not commit real keys.
+- `NEWS_RESTRICTIONS_SYNC_INTERVAL_SECONDS` defaults to `900`, so the backend syncs every 15 minutes.
+
+The sync window is 24 hours back through 14 days forward. Events are upserted by `(source, source_event_id)` to avoid duplicates. The current whitelist normalizes common names for NFP, US unemployment, average hourly earnings, CPI, Advance GDP, FOMC rate decision, FOMC statement, FOMC press conference, and FOMC minutes.
+
+Settings are available in the `News Restrictions` dashboard page and through `PATCH /api/settings/news-restrictions`:
+
+- `account_type`: `standard_funded`, `swing`, or `evaluation`
+- `enforcement_mode`: `warn_only`, `block_actions`, or `disabled`
+- `minutes_before` and `minutes_after`
+- `apply_usd_only`
+- `blocked_actions`: `new_order`, `manual_close`, `modify_sl_tp`, `pending_order`
+
+Only `standard_funded` accounts block actions by default. `swing` and `evaluation` accounts still show calendar warnings, but `block_actions` is downgraded to warn-only behavior.
+
+The MT5 panel already calls `POST /api/rules/pre-trade-check` before sending or simulating a panel order, and `POST /api/rules/pre-close-check` before Close All. Those backend checks now evaluate `NEWS_RESTRICTED_WINDOW` and write `trade_restriction_events` logs when a news window warns or blocks. For future bridge actions such as SL/TP modification or pending-order edits, call `GET /api/news/restriction-status?symbol=XAUUSD&action=modify_sl_tp` or `action=pending_order` before execution.
+
+Current data-source limitation: there is no committed public FTMO API key or hard-coded external endpoint. In development the provider is `mock`; configure a valid FTMO or fallback calendar URL in `.env` before relying on automatic live news sync.
 
 The MT5 EA remains compatible with the original pre-trade payload:
 
@@ -224,6 +253,11 @@ If you manage the database manually, apply `backend/sql/004_rule_engine_guardrai
 - `POST /api/rules/evaluate`
 - `POST /api/rules/pre-trade-check`
 - `GET /api/rules/pre-trade-checks`
+- `GET /api/news/restricted-events?currency=USD`
+- `GET /api/news/restricted-events/upcoming`
+- `GET /api/news/restriction-status?symbol=XAUUSD`
+- `GET /api/news/restriction-logs`
+- `PATCH /api/settings/news-restrictions`
 - `GET /api/alerts`
 - `GET /api/ai/daily-review`
 - `POST /api/ai/daily-review`

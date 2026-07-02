@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models import Account, Alert, PreTradeCheck, RiskRule, Rule, RuleEvaluation, RuleViolation, Trade
 from app.schemas.pre_trade import PreCloseCheckIn, PreTradeCheckIn
+from app.services.news_restrictions import log_restriction_event, news_finding_payload, restriction_status
 from app.services.stats import calculate_stats, latest_closed_trade
 from app.services.telegram import send_telegram_alert
 from app.services.timezone import now_utc, trading_day_bounds
@@ -165,6 +166,15 @@ DEFAULT_RULES: tuple[RuleDefinition, ...] = (
         category="psychology",
         message="Trade blocked because it looks like revenge trading after a recent loss.",
     ),
+    RuleDefinition(
+        name="FTMO restricted news window",
+        code="NEWS_RESTRICTED_WINDOW",
+        description="Warns or blocks USD-sensitive trading actions during configured FTMO restricted news windows.",
+        severity="critical",
+        action="block",
+        category="ftmo",
+        message="Trade blocked because an FTMO restricted news window is active.",
+    ),
 )
 
 DEFAULT_RULES_BY_CODE = {rule.code: rule for rule in DEFAULT_RULES}
@@ -311,6 +321,24 @@ def _finding(catalog: dict[str, Rule], code: str, message: str | None = None, me
 def _add_finding(findings: list[RuleFinding], finding: RuleFinding | None) -> None:
     if finding:
         findings.append(finding)
+
+
+def _news_restriction_finding(catalog: dict[str, Rule], status: dict[str, object]) -> RuleFinding | None:
+    code = "NEWS_RESTRICTED_WINDOW"
+    payload = news_finding_payload(status)
+    if not payload or not _rule_enabled(catalog, code):
+        return None
+    rule_code, action, message, metadata = payload
+    rule = catalog.get(code)
+    return RuleFinding(
+        rule_code=rule_code,
+        message=_rule_message(catalog, code, message),
+        severity=_rule_severity(catalog, code),
+        action=action,
+        category=_rule_category(catalog, code),
+        metadata=metadata,
+        rule_id=rule.id if rule else None,
+    )
 
 
 def _compare_values(left: object, operator: str, right: object) -> bool:
@@ -905,6 +933,24 @@ def evaluate_rules(db: Session, account: Account, trade: Trade | None = None) ->
 def pre_trade_check(db: Session, account: Account, payload: PreTradeCheckIn) -> dict[str, object]:
     catalog = _rule_catalog(db)
     findings = _pre_trade_findings(db, account, payload, catalog)
+    news_status = restriction_status(db, symbol=payload.symbol, action="new_order")
+    _add_finding(findings, _news_restriction_finding(catalog, news_status))
+    log_restriction_event(
+        db,
+        account_id=account.id,
+        account_number=account.account_number,
+        symbol=payload.symbol,
+        action="new_order",
+        status=news_status,
+        context={
+            "order_type": payload.order_type,
+            "lot": payload.lot,
+            "entry_price": payload.entry_price,
+            "sl": payload.sl,
+            "tp": payload.tp,
+            "source": "pre_trade_check",
+        },
+    )
     result = _build_result(
         account.id,
         findings,
@@ -920,7 +966,8 @@ def pre_trade_check(db: Session, account: Account, payload: PreTradeCheckIn) -> 
                 "risk_amount": payload.risk_amount,
                 "ema34": payload.ema34,
                 "ema89": payload.ema89,
-            }
+            },
+            "news_restriction": news_status,
         },
     )
     result = _persist_result(db, result, context="pre_trade")
@@ -967,6 +1014,26 @@ def pre_trade_check(db: Session, account: Account, payload: PreTradeCheckIn) -> 
 def pre_close_check(db: Session, account: Account, payload: PreCloseCheckIn) -> dict[str, object]:
     catalog = _rule_catalog(db)
     findings = _custom_pre_close_findings(catalog, payload)
+    news_status = restriction_status(db, symbol=payload.symbol, action="manual_close")
+    _add_finding(findings, _news_restriction_finding(catalog, news_status))
+    log_restriction_event(
+        db,
+        account_id=account.id,
+        account_number=account.account_number,
+        symbol=payload.symbol,
+        action="manual_close",
+        status=news_status,
+        context={
+            "ticket": payload.ticket,
+            "position_type": payload.position_type,
+            "lot": payload.lot,
+            "entry_price": payload.entry_price,
+            "current_price": payload.current_price,
+            "profit": payload.profit,
+            "close_reason": payload.close_reason,
+            "source": "pre_close_check",
+        },
+    )
     result = _build_result(
         account.id,
         findings,
@@ -985,7 +1052,8 @@ def pre_close_check(db: Session, account: Account, payload: PreCloseCheckIn) -> 
                 "ema34": payload.ema34,
                 "ema89": payload.ema89,
                 "close_reason": payload.close_reason,
-            }
+            },
+            "news_restriction": news_status,
         },
     )
     result = _persist_result(db, result, context="pre_close")

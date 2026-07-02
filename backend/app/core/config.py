@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     api_key: str = "change-me"
     ftmo_timezone: str = "Europe/Prague"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    news_restrictions_provider: str = "mock"
+    news_restrictions_sync_enabled: bool = True
+    news_restrictions_sync_interval_seconds: int = 900
+    news_restrictions_ftmo_calendar_url: str | None = None
+    news_restrictions_fallback_url: str | None = None
+    news_restrictions_api_key: str | None = None
+    news_restrictions_api_key_header: str = "Authorization"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

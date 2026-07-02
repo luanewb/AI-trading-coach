@@ -7,6 +7,10 @@ import type {
   AnalyticsOverview,
   Alert,
   DailyReview,
+  NewsRestrictionSettings,
+  NewsRestrictionStatus,
+  NewsRestrictedEvent,
+  NewsTradeAction,
   PreTradeCheck,
   PreTradeHistoryItem,
   RiskActivityFilter,
@@ -18,7 +22,8 @@ import type {
   RuleIndicator,
   SnapshotRange,
   Stats,
-  Trade
+  Trade,
+  TradeRestrictionLog
 } from "./types";
 
 const PUBLIC_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -117,7 +122,15 @@ export const api = {
   analyticsBreakdown: (groupBy: string, accountId?: number | null, range?: AnalyticsDateRangeQuery) =>
     request<AnalyticsBreakdown>(`/api/analytics/breakdown${analyticsQuery(accountId, range, { group_by: groupBy })}`),
   analyticsInsights: (accountId?: number | null, range?: AnalyticsDateRangeQuery) =>
-    request<AnalyticsInsights>(`/api/analytics/insights${analyticsQuery(accountId, range)}`)
+    request<AnalyticsInsights>(`/api/analytics/insights${analyticsQuery(accountId, range)}`),
+  newsSettings: () => request<NewsRestrictionSettings>("/api/settings/news-restrictions"),
+  updateNewsSettings: (payload: Partial<NewsRestrictionSettings>) =>
+    request<NewsRestrictionSettings>("/api/settings/news-restrictions", { method: "PATCH", body: JSON.stringify(payload) }),
+  restrictedNewsEvents: (currency = "USD") => request<NewsRestrictedEvent[]>(`/api/news/restricted-events?currency=${encodeURIComponent(currency)}`),
+  upcomingRestrictedNewsEvents: () => request<NewsRestrictedEvent[]>("/api/news/restricted-events/upcoming"),
+  newsRestrictionStatus: (symbol = "XAUUSD", action: NewsTradeAction = "new_order") =>
+    request<NewsRestrictionStatus>(`/api/news/restriction-status${queryString({ symbol, action })}`),
+  newsRestrictionLogs: () => request<TradeRestrictionLog[]>("/api/news/restriction-logs")
 };
 
 export { API_BASE_URL, PUBLIC_API_BASE_URL };

@@ -349,3 +349,70 @@ export type RuleIndicator = {
   latest_action_taken: string | null;
   current_active_state: string;
 };
+
+export type NewsTradeAction = "new_order" | "manual_close" | "modify_sl_tp" | "pending_order";
+export type NewsEnforcementMode = "warn_only" | "block_actions" | "disabled";
+export type NewsAccountType = "standard_funded" | "swing" | "evaluation";
+
+export type NewsRestrictedEvent = {
+  id: number;
+  source: string;
+  title: string;
+  normalized_title: string;
+  currency: string;
+  country: string | null;
+  scheduled_at: string;
+  impact: string | null;
+  actual: string | null;
+  forecast: string | null;
+  previous: string | null;
+  is_restricted: boolean;
+  restriction_reason: string | null;
+  window_start: string | null;
+  window_end: string | null;
+};
+
+export type NewsRestrictionSettings = {
+  id: number;
+  account_type: NewsAccountType;
+  enforcement_mode: NewsEnforcementMode;
+  minutes_before: number;
+  minutes_after: number;
+  apply_usd_only: boolean;
+  blocked_actions: NewsTradeAction[];
+  updated_at: string | null;
+};
+
+export type NewsRestrictionStatus = {
+  symbol: string;
+  action: NewsTradeAction;
+  usd_sensitive: boolean;
+  is_restricted_now: boolean;
+  enforcement_mode: NewsEnforcementMode;
+  effective_mode: NewsEnforcementMode;
+  account_type: NewsAccountType;
+  should_block: boolean;
+  should_warn: boolean;
+  blocked_actions: NewsTradeAction[];
+  current_event: NewsRestrictedEvent | null;
+  upcoming_event: NewsRestrictedEvent | null;
+  seconds_until_event: number | null;
+  seconds_until_restriction_end: number | null;
+  restricted_until: string | null;
+  checked_at: string;
+};
+
+export type TradeRestrictionLog = {
+  id: number;
+  account_id: number | null;
+  account_number: string | null;
+  symbol: string;
+  action: string;
+  mode: string;
+  blocked: boolean;
+  news_event_id: number | null;
+  event_title: string | null;
+  restricted_until: string | null;
+  context: Record<string, unknown>;
+  created_at: string;
+};

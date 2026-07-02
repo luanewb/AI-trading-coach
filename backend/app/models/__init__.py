@@ -1,4 +1,20 @@
-from app.models.entities import Account, AccountSnapshot, Alert, DailyReview, DailySummary, PreTradeCheck, RiskRule, Rule, RuleEvaluation, RuleViolation, Trade, TradeEvent
+from app.models.entities import (
+    Account,
+    AccountSnapshot,
+    Alert,
+    DailyReview,
+    DailySummary,
+    NewsRestrictedEvent,
+    NewsRestrictionSettings,
+    PreTradeCheck,
+    RiskRule,
+    Rule,
+    RuleEvaluation,
+    RuleViolation,
+    Trade,
+    TradeEvent,
+    TradeRestrictionEvent,
+)
 
 __all__ = [
     "Account",
@@ -6,6 +22,8 @@ __all__ = [
     "Alert",
     "DailyReview",
     "DailySummary",
+    "NewsRestrictedEvent",
+    "NewsRestrictionSettings",
     "PreTradeCheck",
     "RiskRule",
     "Rule",
@@ -13,4 +31,5 @@ __all__ = [
     "RuleViolation",
     "Trade",
     "TradeEvent",
+    "TradeRestrictionEvent",
 ]

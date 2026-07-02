@@ -126,6 +126,68 @@ class TradeEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class NewsRestrictionSettings(Base):
+    __tablename__ = "news_restriction_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_type: Mapped[str] = mapped_column(String(32), default="standard_funded")
+    enforcement_mode: Mapped[str] = mapped_column(String(32), default="block_actions")
+    minutes_before: Mapped[int] = mapped_column(Integer, default=2)
+    minutes_after: Mapped[int] = mapped_column(Integer, default=2)
+    apply_usd_only: Mapped[bool] = mapped_column(Boolean, default=True)
+    blocked_actions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class NewsRestrictedEvent(Base):
+    __tablename__ = "news_restricted_events"
+    __table_args__ = (
+        UniqueConstraint("source", "source_event_id", name="uq_news_restricted_events_source_event"),
+        Index("idx_news_restricted_events_currency_scheduled_at", "currency", "scheduled_at"),
+        Index("idx_news_restricted_events_restricted_scheduled_at", "is_restricted", "scheduled_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(64))
+    source_event_id: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(255))
+    normalized_title: Mapped[str] = mapped_column(String(128), index=True)
+    currency: Mapped[str] = mapped_column(String(8), index=True)
+    country: Mapped[str | None] = mapped_column(String(64))
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    impact: Mapped[str | None] = mapped_column(String(16))
+    actual: Mapped[str | None] = mapped_column(String(128))
+    forecast: Mapped[str | None] = mapped_column(String(128))
+    previous: Mapped[str | None] = mapped_column(String(128))
+    is_restricted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    restriction_reason: Mapped[str | None] = mapped_column(Text)
+    raw_payload: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TradeRestrictionEvent(Base):
+    __tablename__ = "trade_restriction_events"
+    __table_args__ = (
+        Index("idx_trade_restriction_events_account_created_at", "account_id", "created_at"),
+        Index("idx_trade_restriction_events_symbol_created_at", "symbol", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
+    account_number: Mapped[str | None] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    mode: Mapped[str] = mapped_column(String(32))
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    news_event_id: Mapped[int | None] = mapped_column(ForeignKey("news_restricted_events.id", ondelete="SET NULL"), index=True)
+    event_title: Mapped[str | None] = mapped_column(String(255))
+    restricted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    context: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class RiskRule(Base):
     __tablename__ = "risk_rules"
 
