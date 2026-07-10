@@ -10,6 +10,7 @@ from app.schemas.journal import StatsOut, TradeOut, TradePatch
 from app.services.stats import calculate_stats
 from app.services.stats import executed_trade_filter
 from app.services.stats import get_selected_account
+from app.services.stats import trade_net_pnl_expr
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -36,9 +37,9 @@ def list_trades(
     if setup:
         stmt = stmt.where(Trade.setup_name.ilike(f"%{setup}%"))
     if result == "win":
-        stmt = stmt.where(Trade.profit > 0)
+        stmt = stmt.where(trade_net_pnl_expr() > 0)
     if result == "loss":
-        stmt = stmt.where(Trade.profit < 0)
+        stmt = stmt.where(trade_net_pnl_expr() < 0)
     if trade_date:
         start = datetime.combine(trade_date, time.min, tzinfo=timezone.utc)
         end = datetime.combine(trade_date, time.max, tzinfo=timezone.utc)

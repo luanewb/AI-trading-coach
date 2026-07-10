@@ -81,7 +81,13 @@ def test_migration_upgrade_creates_foundation_tables(db_session: Session) -> Non
     assert {"account_snapshots", "trade_events", "daily_summaries"}.issubset(set(inspector.get_table_names()))
     trade_columns = {column["name"] for column in inspector.get_columns("trades")}
     assert {"deal_id", "position_id", "source", "strategy"}.issubset(trade_columns)
-    assert {"before_entry_image_url", "after_exit_image_url", "analysis_image_url"}.issubset(trade_columns)
+    assert {
+        "before_entry_image_url",
+        "after_exit_image_url",
+        "analysis_image_url",
+        "journal_link",
+        "journal_entry_mode",
+    }.issubset(trade_columns)
     violation_columns = {column["name"] for column in inspector.get_columns("rule_violations")}
     assert {"is_resolved", "resolved_at", "resolution_note"}.issubset(violation_columns)
 
@@ -110,6 +116,147 @@ def test_duplicate_trade_event_does_not_create_duplicate_trade(db_session: Sessi
     assert first["trade_id"] == second["trade_id"]
     assert db_session.scalar(select(func.count(Trade.id)).where(Trade.ticket == "900001")) == 1
     assert db_session.scalar(select(func.count(TradeEvent.id)).where(TradeEvent.ticket == "900001")) == 1
+
+
+def test_close_event_accumulates_open_and_close_deal_costs(db_session: Session) -> None:
+    _account(db_session)
+    opened = TradeEventIn(
+        account_number="100001",
+        event_type="order_opened",
+        symbol="XAUUSD",
+        ticket="900002",
+        deal_id="700002",
+        position_id="800002",
+        order_type="BUY",
+        lot=Decimal("0.50"),
+        entry_price=Decimal("2320.50"),
+        sl=Decimal("2312.50"),
+        tp=Decimal("2338.50"),
+        profit=Decimal("0"),
+        commission=Decimal("-1.90"),
+        swap=Decimal("0"),
+        open_time=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+    )
+    closed = TradeEventIn(
+        account_number="100001",
+        event_type="order_closed",
+        symbol="XAUUSD",
+        ticket="900002",
+        deal_id="700003",
+        position_id="800002",
+        order_type="BUY",
+        lot=Decimal("0.50"),
+        entry_price=Decimal("2320.50"),
+        sl=Decimal("2312.50"),
+        tp=Decimal("2338.50"),
+        close_price=Decimal("2324.00"),
+        profit=Decimal("72.60"),
+        commission=Decimal("-1.90"),
+        swap=Decimal("0"),
+        open_time=datetime(2026, 6, 30, 7, 0, tzinfo=timezone.utc),
+        close_time=datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc),
+    )
+
+    receive_trade_event(opened, db_session)
+    receive_trade_event(closed, db_session)
+    receive_trade_event(closed, db_session)
+    repeated_close = closed.model_copy(update={"deal_id": "700004"})
+    receive_trade_event(repeated_close, db_session)
+
+    trade = db_session.scalar(select(Trade).where(Trade.ticket == "900002"))
+    assert trade is not None
+    assert trade.status == "closed"
+    assert trade.profit == Decimal("72.60")
+    assert trade.commission == Decimal("-3.80")
+    assert db_session.scalar(select(func.count(TradeEvent.id)).where(TradeEvent.ticket == "900002")) == 3
+
+
+def test_sell_history_close_deal_does_not_flip_side_or_duplicate_profit(db_session: Session) -> None:
+    _account(db_session)
+    opened = TradeEventIn(
+        account_number="100001",
+        event_type="order_opened",
+        symbol="XAUUSD",
+        ticket="165568340",
+        deal_id="155669000",
+        position_id="165568340",
+        order_type="ORDER_TYPE_SELL",
+        lot=Decimal("0.74"),
+        entry_price=Decimal("4122.81"),
+        sl=Decimal("4148.31"),
+        tp=Decimal("3995.43"),
+        profit=Decimal("0"),
+        commission=Decimal("-2.14"),
+        swap=Decimal("0"),
+        open_time=datetime(2026, 7, 8, 7, 30, 58, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 7, 8, 7, 30, 58, tzinfo=timezone.utc),
+        source="mt5-history",
+    )
+    managed = TradeEventIn(
+        account_number="100001",
+        event_type="position_updated",
+        symbol="XAUUSD",
+        ticket="165568340",
+        position_id="165568340",
+        order_type="ORDER_TYPE_SELL",
+        lot=Decimal("0.74"),
+        entry_price=Decimal("4122.81"),
+        sl=Decimal("4122.04"),
+        tp=Decimal("4046.48"),
+        profit=Decimal("0"),
+        commission=Decimal("0"),
+        swap=Decimal("0"),
+        open_time=datetime(2026, 7, 8, 8, 34, 40, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 7, 8, 8, 34, 40, tzinfo=timezone.utc),
+        source="mt5",
+    )
+    closed = TradeEventIn(
+        account_number="100001",
+        event_type="order_closed",
+        symbol="XAUUSD",
+        ticket="165568340",
+        deal_id="155669261",
+        position_id="165568340",
+        order_type="ORDER_TYPE_BUY",
+        lot=Decimal("0.74"),
+        entry_price=Decimal("4122.81"),
+        sl=Decimal("4122.04"),
+        tp=Decimal("4046.48"),
+        close_price=Decimal("4046.46"),
+        profit=Decimal("5649.90"),
+        commission=Decimal("-2.10"),
+        swap=Decimal("0"),
+        open_time=datetime(2026, 7, 8, 7, 30, 58, tzinfo=timezone.utc),
+        close_time=datetime(2026, 7, 8, 9, 43, 15, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 7, 8, 9, 43, 15, tzinfo=timezone.utc),
+        source="mt5-history",
+    )
+    repeated_close = closed.model_copy(
+        update={
+            "deal_id": "155669262",
+            "close_time": datetime(2026, 7, 8, 9, 43, 16, tzinfo=timezone.utc),
+            "timestamp": datetime(2026, 7, 8, 9, 43, 16, tzinfo=timezone.utc),
+        }
+    )
+
+    receive_trade_event(opened, db_session)
+    receive_trade_event(managed, db_session)
+    receive_trade_event(closed, db_session)
+    receive_trade_event(repeated_close, db_session)
+
+    trade = db_session.scalar(select(Trade).where(Trade.ticket == "165568340"))
+    assert trade is not None
+    assert trade.order_type == "SELL"
+    assert trade.sl == Decimal("4148.31")
+    assert trade.tp == Decimal("3995.43")
+    assert trade.profit == Decimal("5649.90")
+    assert trade.commission == Decimal("-4.24")
+    assert trade.r_multiple is not None
+    assert trade.r_multiple.quantize(Decimal("0.01")) == Decimal("2.99")
+    assert trade.notes == "Bot: Trade management changes: SL 4148.31 -> 4122.04; TP 3995.43 -> 4046.48."
+    assert db_session.scalar(select(func.count(TradeEvent.id)).where(TradeEvent.ticket == "165568340")) == 4
 
 
 def test_pending_order_event_does_not_create_trade(db_session: Session) -> None:
@@ -210,7 +357,9 @@ def test_account_snapshot_persists_on_heartbeat(db_session: Session) -> None:
     )
 
     snapshot = db_session.scalar(select(AccountSnapshot).where(AccountSnapshot.account_id == response["account_id"]))
+    evaluation_count = db_session.scalar(select(func.count(RuleEvaluation.id)).where(RuleEvaluation.account_id == response["account_id"]))
     assert snapshot is not None
     assert snapshot.equity == Decimal("9975.25")
     assert snapshot.free_margin == Decimal("9850.25")
     assert snapshot.timestamp == datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
+    assert evaluation_count == 0

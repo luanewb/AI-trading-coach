@@ -20,6 +20,14 @@ def executed_trade_filter():
     return or_(Trade.status == "closed", Trade.deal_id.is_not(None), Trade.position_id.is_not(None))
 
 
+def trade_net_pnl(trade: Trade) -> Decimal:
+    return Decimal(trade.profit or 0) + Decimal(trade.commission or 0) + Decimal(trade.swap or 0)
+
+
+def trade_net_pnl_expr():
+    return func.coalesce(Trade.profit, 0) + func.coalesce(Trade.commission, 0) + func.coalesce(Trade.swap, 0)
+
+
 def is_seed_demo_account(account: Account | None) -> bool:
     if not account:
         return False
@@ -66,7 +74,7 @@ def get_selected_account(db: Session, account_id: int | None = None) -> Account 
 def count_consecutive_losses(trades: list[Trade]) -> int:
     losses = 0
     for trade in reversed(trades):
-        if Decimal(trade.profit or 0) < 0:
+        if trade_net_pnl(trade) < 0:
             losses += 1
         else:
             break
@@ -76,17 +84,17 @@ def count_consecutive_losses(trades: list[Trade]) -> int:
 def calculate_stats(db: Session, account_id: int | None = None) -> dict[str, float | int]:
     trades = list(db.scalars(_closed_trade_query(account_id).order_by(asc(Trade.close_time), asc(Trade.id))))
     total_trades = len(trades)
-    wins = [trade for trade in trades if Decimal(trade.profit or 0) > 0]
-    losses = [trade for trade in trades if Decimal(trade.profit or 0) < 0]
-    gross_profit = sum((Decimal(trade.profit or 0) for trade in wins), Decimal("0"))
-    gross_loss = abs(sum((Decimal(trade.profit or 0) for trade in losses), Decimal("0")))
+    wins = [trade for trade in trades if trade_net_pnl(trade) > 0]
+    losses = [trade for trade in trades if trade_net_pnl(trade) < 0]
+    gross_profit = sum((trade_net_pnl(trade) for trade in wins), Decimal("0"))
+    gross_loss = abs(sum((trade_net_pnl(trade) for trade in losses), Decimal("0")))
     r_values = [Decimal(trade.r_multiple) for trade in trades if trade.r_multiple is not None]
 
     equity_curve = Decimal("0")
     peak = Decimal("0")
     max_drawdown = Decimal("0")
     for trade in trades:
-        equity_curve += Decimal(trade.profit or 0)
+        equity_curve += trade_net_pnl(trade)
         peak = max(peak, equity_curve)
         max_drawdown = min(max_drawdown, equity_curve - peak)
 
@@ -98,7 +106,7 @@ def calculate_stats(db: Session, account_id: int | None = None) -> dict[str, flo
     closed_today = and_(Trade.close_time >= day_start, Trade.close_time <= day_end, Trade.status == "closed")
     open_execution_today = and_(Trade.status != "closed", opened_today, executed_trade_filter())
     trades_today_stmt = select(func.count(Trade.id)).where(or_(closed_today, open_execution_today))
-    today_pnl_stmt = select(func.coalesce(func.sum(Trade.profit), 0)).where(
+    today_pnl_stmt = select(func.coalesce(func.sum(trade_net_pnl_expr()), 0)).where(
         Trade.close_time >= day_start,
         Trade.close_time <= day_end,
         Trade.status == "closed",

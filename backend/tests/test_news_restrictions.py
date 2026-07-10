@@ -11,6 +11,8 @@ from app.services import news_restrictions as news_service
 from app.services import rule_engine
 from app.services.news_restrictions import (
     EconomicEvent,
+    FairEconomyCalendarProvider,
+    MockCalendarProvider,
     is_restricted_usd_event,
     is_usd_sensitive_symbol,
     normalize_event_title,
@@ -127,6 +129,7 @@ def test_normalizes_restricted_event_name_variants():
     assert normalize_event_title("Non-Farm Payrolls") == "non_farm_payrolls"
     assert normalize_event_title("US NFP Employment Change") == "non_farm_payrolls"
     assert normalize_event_title("FOMC Press Conference") == "fomc_press_conference"
+    assert normalize_event_title("FOMC Meeting Minutes") == "fomc_minutes"
     assert is_restricted_usd_event("Core CPI m/m", "USD")[0] is True
     assert is_restricted_usd_event("Core CPI m/m", "EUR")[0] is False
 
@@ -206,13 +209,65 @@ def test_upsert_economic_event_updates_without_duplicate():
 
 def test_mock_provider_seeds_today_ftmo_nfp_event():
     db = FakeNewsSession()
-    count = sync_restricted_events(db, base_time=datetime(2026, 7, 2, 5, 0, tzinfo=timezone.utc))
+    count = sync_restricted_events(db, provider=MockCalendarProvider(), base_time=datetime(2026, 7, 2, 5, 0, tzinfo=timezone.utc))
 
     assert count == 1
     assert db.events[0].title == "Non-Farm Employment Change"
     assert db.events[0].scheduled_at == datetime(2026, 7, 2, 12, 30, tzinfo=timezone.utc)
     assert db.events[0].forecast == "114 K"
     assert db.events[0].previous == "172 K"
+
+
+def test_fair_economy_provider_parses_real_calendar_format(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {
+                    "title": "FOMC Meeting Minutes",
+                    "country": "USD",
+                    "date": "2026-07-08T14:00:00-04:00",
+                    "impact": "High",
+                    "forecast": "",
+                    "previous": "",
+                },
+                {
+                    "title": "Employment Change",
+                    "country": "CAD",
+                    "date": "2026-07-10T08:30:00-04:00",
+                    "impact": "High",
+                },
+            ]
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def get(self, url):
+            assert url == "https://example.test/calendar.json"
+            return FakeResponse()
+
+    monkeypatch.setattr(news_service.httpx, "Client", FakeClient)
+
+    provider = FairEconomyCalendarProvider("https://example.test/calendar.json")
+    events = provider.get_events(
+        from_time=datetime(2026, 7, 8, 0, 0, tzinfo=timezone.utc),
+        to_time=datetime(2026, 7, 9, 0, 0, tzinfo=timezone.utc),
+        currencies=["USD"],
+    )
+
+    assert len(events) == 1
+    assert events[0].title == "FOMC Meeting Minutes"
+    assert events[0].scheduled_at == datetime(2026, 7, 8, 18, 0, tzinfo=timezone.utc)
+    assert events[0].is_restricted is True
 
 
 def test_restriction_status_api_contract():

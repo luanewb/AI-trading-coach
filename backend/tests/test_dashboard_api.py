@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.api import dashboard as dashboard_api
 from app.db.session import get_db
 from app.main import app
-from app.models import Account, AccountSnapshot, PreTradeCheck, RiskRule, Rule, RuleEvaluation, RuleViolation
+from app.models import Account, AccountSnapshot, PreTradeCheck, RiskRule, Rule, RuleEvaluation, RuleViolation, Trade
 
 
 class ExecuteResult:
@@ -126,6 +126,27 @@ def test_risk_summary_returns_budget_visibility(monkeypatch):
     assert body["daily_loss"]["percent_used"] == 80.0
     assert body["trades_today"]["remaining"] == 1
     assert body["max_lot"]["planned_lot"] == "0.75"
+
+
+def test_dashboard_cooldown_uses_received_time_when_close_time_is_in_future(monkeypatch):
+    current_time = datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
+    future_loss = Trade(
+        id=20,
+        account_id=1,
+        ticket="L3",
+        symbol="XAUUSD",
+        order_type="BUY",
+        lot=Decimal("0.50"),
+        profit=Decimal("-50"),
+        status="closed",
+        close_time=current_time + timedelta(hours=3),
+        created_at=current_time - timedelta(minutes=45),
+        updated_at=current_time - timedelta(minutes=1),
+    )
+    monkeypatch.setattr(dashboard_api, "now_utc", lambda: current_time)
+    monkeypatch.setattr(dashboard_api, "latest_closed_trade", lambda _db, _account_id: future_loss)
+
+    assert dashboard_api._cooldown_until(FakeSession(), 1, 30) is None
 
 
 def test_risk_activity_filters_resolved_and_warning_items(monkeypatch):

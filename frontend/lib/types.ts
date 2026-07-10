@@ -118,6 +118,9 @@ export type Trade = {
   tp: string | null;
   close_price: string | null;
   profit: string;
+  commission: string;
+  swap: string;
+  net_profit?: string;
   r_multiple: string | null;
   status: string;
   open_time: string | null;
@@ -131,6 +134,8 @@ export type Trade = {
   before_entry_image_url: string | null;
   after_exit_image_url: string | null;
   analysis_image_url: string | null;
+  journal_link: string | null;
+  journal_entry_mode: "screenshots" | "notion";
 };
 
 export type Alert = {

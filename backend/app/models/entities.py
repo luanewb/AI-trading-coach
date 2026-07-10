@@ -85,6 +85,8 @@ class Trade(Base):
     before_entry_image_url: Mapped[str | None] = mapped_column(Text)
     after_exit_image_url: Mapped[str | None] = mapped_column(Text)
     analysis_image_url: Mapped[str | None] = mapped_column(Text)
+    journal_link: Mapped[str | None] = mapped_column(Text)
+    journal_entry_mode: Mapped[str] = mapped_column(String(16), default="notion", server_default="notion")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

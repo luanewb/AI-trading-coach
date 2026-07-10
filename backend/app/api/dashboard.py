@@ -114,8 +114,20 @@ def _cooldown_until(db: Session, account_id: int, minutes: int):
     close_time = last_trade.close_time
     if close_time.tzinfo is None:
         close_time = close_time.replace(tzinfo=now_utc().tzinfo)
+    current_time = now_utc()
+    if close_time > current_time + timedelta(minutes=1):
+        fallback_time = last_trade.created_at or last_trade.updated_at
+        if fallback_time:
+            if fallback_time.tzinfo is None:
+                fallback_time = fallback_time.replace(tzinfo=current_time.tzinfo)
+            if fallback_time <= current_time + timedelta(minutes=1):
+                close_time = fallback_time
     cooldown_end = close_time + timedelta(minutes=minutes)
-    return cooldown_end if cooldown_end > now_utc() else None
+    return cooldown_end if cooldown_end > current_time else None
+
+
+def _is_transient_rule(rule_code: str) -> bool:
+    return rule_code in {"COOLDOWN_AFTER_LOSS", "REVENGE_TRADING"}
 
 
 def _metadata_value(metadata: dict[str, Any], key: str) -> str | None:
@@ -206,6 +218,7 @@ def risk_summary(db: Session = Depends(get_db), account_id: int | None = None) -
             .limit(10)
         )
     )
+    active_violations = [item for item in active_violations if not _is_transient_rule(item.rule_code)]
 
     lock_active = any(item.action == "lock" for item in active_violations) or total_drawdown.percent_used >= 100
     block_active = (
@@ -420,6 +433,8 @@ def pre_trade_history(
 def rule_indicators(db: Session = Depends(get_db), account_id: int | None = None) -> list[RuleIndicatorOut]:
     account = _selected_account(db, account_id)
     catalog = list(db.scalars(select(Rule).order_by(Rule.code)))
+    risk_rule = _risk_rule_or_default(db, account.id)
+    cooldown_active = bool(_cooldown_until(db, account.id, int(risk_rule.cooldown_minutes_after_loss)))
     day_start, day_end = trading_day_bounds()
     today_counts = {
         code: count
@@ -446,7 +461,10 @@ def rule_indicators(db: Session = Depends(get_db), account_id: int | None = None
     active_by_code: dict[str, RuleViolation] = {}
     for violation in recent_violations:
         latest_by_code.setdefault(violation.rule_code, violation)
-        if not violation.is_resolved:
+        if not violation.is_resolved and (
+            not _is_transient_rule(violation.rule_code)
+            or (violation.rule_code == "COOLDOWN_AFTER_LOSS" and cooldown_active)
+        ):
             active_by_code.setdefault(violation.rule_code, violation)
 
     return [

@@ -55,10 +55,13 @@ export default function NewsRestrictionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  async function load(nextSymbol = symbol) {
+  async function load(nextSymbol = symbol, sync = false) {
     setLoading(true);
     setError(null);
     try {
+      if (sync) {
+        await api.syncRestrictedNewsEvents();
+      }
       const [nextSettings, nextStatus, nextEvents, nextLogs] = await Promise.all([
         api.newsSettings(),
         api.newsRestrictionStatus(nextSymbol),
@@ -123,7 +126,7 @@ export default function NewsRestrictionsPage() {
           <p className="kicker">News Restrictions</p>
           <h2 className="page-title">FTMO restricted news guard</h2>
         </div>
-        <button className="secondary-action" type="button" onClick={() => load(symbol)} disabled={loading}>
+        <button className="secondary-action" type="button" onClick={() => load(symbol, true)} disabled={loading}>
           <RefreshCcw size={16} aria-hidden />
           Refresh
         </button>
@@ -180,8 +183,8 @@ export default function NewsRestrictionsPage() {
               <p className="text-sm text-zinc-400">Times are displayed in your local timezone.</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[760px] w-full border-collapse text-sm">
+          <div className="overflow-x-auto 2xl:overflow-x-visible">
+            <table className="w-full min-w-[760px] border-collapse text-sm 2xl:min-w-0 2xl:table-fixed">
               <thead className="bg-paper text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
                 <tr>
                   <th className="p-3">Event</th>
@@ -279,8 +282,8 @@ export default function NewsRestrictionsPage() {
             <p className="text-sm text-zinc-400">Warnings and blocks recorded by backend trade guard checks.</p>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-[820px] w-full border-collapse text-sm">
+        <div className="overflow-x-auto 2xl:overflow-x-visible">
+          <table className="w-full min-w-[820px] border-collapse text-sm 2xl:min-w-0 2xl:table-fixed">
             <thead className="bg-paper text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
               <tr>
                 <th className="p-3">Time</th>

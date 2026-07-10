@@ -15,23 +15,17 @@ def direction_from_prices(entry_price: object, sl: object, tp: object) -> str | 
     if entry is None:
         return None
 
-    sell_votes = 0
-    buy_votes = 0
-    if stop_loss is not None:
-        if stop_loss > entry:
-            sell_votes += 1
-        elif stop_loss < entry:
-            buy_votes += 1
     if take_profit is not None:
         if take_profit < entry:
-            sell_votes += 1
+            return "SELL"
         elif take_profit > entry:
-            buy_votes += 1
+            return "BUY"
 
-    if sell_votes > buy_votes:
-        return "SELL"
-    if buy_votes > sell_votes:
-        return "BUY"
+    if stop_loss is not None:
+        if stop_loss > entry:
+            return "SELL"
+        if stop_loss < entry:
+            return "BUY"
     return None
 
 

@@ -12,6 +12,12 @@ function formatMoney(value: string | number | null) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 }
 
+function netPnl(trade: Trade) {
+  const explicit = Number(trade.net_profit);
+  if (Number.isFinite(explicit)) return explicit;
+  return Number(trade.profit || 0) + Number(trade.commission || 0) + Number(trade.swap || 0);
+}
+
 function formatOrderType(value: string) {
   const normalized = value.toUpperCase();
   if (normalized === "ORDER_TYPE_BUY" || normalized === "BUY") return "Buy";
@@ -27,7 +33,7 @@ function formatR(value: string | number | null) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-function normalizeScreenshotUrl(value: string | null | undefined) {
+function normalizeUrl(value: string | null | undefined) {
   const trimmed = (value || "").trim();
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
@@ -72,14 +78,19 @@ export default function JournalPage() {
   async function save(trade: Trade) {
     setSavingId(trade.id);
     try {
+      const journalPayload: Partial<Trade> = trade.journal_entry_mode === "notion"
+        ? { journal_link: trade.journal_link }
+        : {
+            before_entry_image_url: trade.before_entry_image_url,
+            after_exit_image_url: trade.after_exit_image_url,
+            analysis_image_url: trade.analysis_image_url
+          };
       await api.updateTrade(trade.id, {
         setup_name: trade.setup_name,
         emotion: trade.emotion,
         mistake_tags: normalizeMistakeTags(trade.mistake_tags),
         notes: trade.notes,
-        before_entry_image_url: trade.before_entry_image_url,
-        after_exit_image_url: trade.after_exit_image_url,
-        analysis_image_url: trade.analysis_image_url
+        ...journalPayload
       } as Partial<Trade>, selectedAccountId);
       await load();
     } finally {
@@ -124,8 +135,22 @@ export default function JournalPage() {
       {error && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-bad">{error}</p>}
 
       <section className="panel mt-5 overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="min-w-[1420px] w-full border-collapse text-sm">
+        <div className="overflow-x-auto 2xl:overflow-x-visible">
+        <table className="w-full min-w-[1420px] border-collapse text-sm 2xl:min-w-0 2xl:table-fixed">
+          <colgroup>
+            <col className="w-[7%]" />
+            <col className="w-[6%]" />
+            <col className="w-[5%]" />
+            <col className="w-[4%]" />
+            <col className="w-[7%]" />
+            <col className="w-[3%]" />
+            <col className="w-[9%]" />
+            <col className="w-[8%]" />
+            <col className="w-[11%]" />
+            <col className="w-[15%]" />
+            <col className="w-[20%]" />
+            <col className="w-[5%]" />
+          </colgroup>
           <thead className="bg-paper text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
             <tr>
               <th className="p-3">Ticket</th>
@@ -138,7 +163,7 @@ export default function JournalPage() {
               <th className="p-3">Emotion</th>
               <th className="p-3">Mistakes</th>
               <th className="p-3">Notes</th>
-              <th className="p-3">Screenshots</th>
+              <th className="p-3">Journal</th>
               <th className="p-3">Save</th>
             </tr>
           </thead>
@@ -149,20 +174,20 @@ export default function JournalPage() {
                 <td className="p-3 font-semibold text-zinc-50">{trade.symbol}</td>
                 <td className="p-3">{formatOrderType(trade.order_type)}</td>
                 <td className="p-3 tabular-nums">{trade.lot}</td>
-                <td className={`p-3 font-semibold ${Number(trade.profit) >= 0 ? "text-good" : "text-bad"}`}>{formatMoney(trade.profit)}</td>
+                <td className={`p-3 font-semibold ${netPnl(trade) >= 0 ? "text-good" : "text-bad"}`}>{formatMoney(netPnl(trade))}</td>
                 <td className="p-3 tabular-nums">{formatR(trade.r_multiple)}</td>
-                <td className="p-3"><input className="input-field h-9 w-36" value={trade.setup_name ?? ""} onChange={(event) => updateTrade(trade.id, { setup_name: event.target.value })} /></td>
-                <td className="p-3"><input className="input-field h-9 w-32" value={trade.emotion ?? ""} onChange={(event) => updateTrade(trade.id, { emotion: event.target.value })} /></td>
+                <td className="p-3"><input className="input-field h-9 w-full min-w-0" value={trade.setup_name ?? ""} onChange={(event) => updateTrade(trade.id, { setup_name: event.target.value })} /></td>
+                <td className="p-3"><input className="input-field h-9 w-full min-w-0" value={trade.emotion ?? ""} onChange={(event) => updateTrade(trade.id, { emotion: event.target.value })} /></td>
                 <td className="p-3">
                   <input
-                    className="input-field h-9 w-44"
+                    className="input-field h-9 w-full min-w-0"
                     value={(trade.mistake_tags || []).join(",")}
                     onChange={(event) => updateTrade(trade.id, { mistake_tags: event.target.value.split(",") })}
                   />
                 </td>
-                <td className="p-3"><textarea className="textarea-field h-16 w-56 resize-none" value={trade.notes ?? ""} onChange={(event) => updateTrade(trade.id, { notes: event.target.value })} /></td>
+                <td className="p-3"><textarea className="textarea-field h-16 w-full min-w-0 resize-none" value={trade.notes ?? ""} onChange={(event) => updateTrade(trade.id, { notes: event.target.value })} /></td>
                 <td className="p-3">
-                  <ScreenshotLinks trade={trade} onChange={(patch) => updateTrade(trade.id, patch)} />
+                  <JournalLinkFields trade={trade} onChange={(patch) => updateTrade(trade.id, patch)} />
                 </td>
                 <td className="p-3">
                   <button className="grid h-9 w-9 place-items-center rounded-lg bg-accent text-slate-950 disabled:opacity-50" onClick={() => save(trade)} disabled={savingId === trade.id} aria-label="Save trade">
@@ -212,21 +237,37 @@ export default function JournalPage() {
   );
 }
 
-function ScreenshotLinks({ trade, onChange }: { trade: Trade; onChange: (patch: Partial<Trade>) => void }) {
+function JournalLinkFields({ trade, onChange }: { trade: Trade; onChange: (patch: Partial<Trade>) => void }) {
+  if (trade.journal_entry_mode === "notion") {
+    return (
+      <div className="w-full min-w-0">
+        <LinkInput
+          label="Notion"
+          placeholder="notion.so/..."
+          value={trade.journal_link}
+          onChange={(value) => onChange({ journal_link: value })}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="grid w-64 gap-2">
-      <ScreenshotLinkInput
+    <div className="grid w-full min-w-0 gap-2">
+      <LinkInput
         label="Before entry"
+        placeholder="tradingview.com/x/..."
         value={trade.before_entry_image_url}
         onChange={(value) => onChange({ before_entry_image_url: value })}
       />
-      <ScreenshotLinkInput
+      <LinkInput
         label="After exit"
+        placeholder="tradingview.com/x/..."
         value={trade.after_exit_image_url}
         onChange={(value) => onChange({ after_exit_image_url: value })}
       />
-      <ScreenshotLinkInput
+      <LinkInput
         label="Analysis"
+        placeholder="tradingview.com/x/..."
         value={trade.analysis_image_url}
         onChange={(value) => onChange({ analysis_image_url: value })}
       />
@@ -234,14 +275,14 @@ function ScreenshotLinks({ trade, onChange }: { trade: Trade; onChange: (patch: 
   );
 }
 
-function ScreenshotLinkInput({ label, value, onChange }: { label: string; value: string | null; onChange: (value: string) => void }) {
-  const url = normalizeScreenshotUrl(value);
+function LinkInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string | null; onChange: (value: string) => void }) {
+  const url = normalizeUrl(value);
   return (
-    <label className="grid grid-cols-[76px_1fr_32px] items-center gap-2 text-[11px] text-zinc-500">
+    <label className="grid min-w-0 grid-cols-[76px_minmax(0,1fr)_32px] items-center gap-2 text-[11px] text-zinc-500">
       <span className="whitespace-nowrap">{label}</span>
       <input
         className="input-field h-8 min-w-0 px-2 text-xs"
-        placeholder="tradingview.com/x/..."
+        placeholder={placeholder}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -250,7 +291,7 @@ function ScreenshotLinkInput({ label, value, onChange }: { label: string; value:
         href={url || undefined}
         target="_blank"
         rel="noreferrer"
-        aria-label={`Open ${label} screenshot`}
+        aria-label={`Open ${label}`}
         title={`Open ${label}`}
       >
         <ExternalLink size={14} aria-hidden />

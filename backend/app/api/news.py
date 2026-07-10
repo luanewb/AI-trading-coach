@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -17,11 +18,13 @@ from app.services.news_restrictions import (
     list_restricted_events,
     list_restriction_logs,
     restriction_status,
+    sync_restricted_events,
     update_settings,
 )
 from app.services.timezone import now_utc
 
 router = APIRouter(tags=["news-restrictions"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/news/restricted-events", response_model=list[EconomicEventOut])
@@ -36,6 +39,18 @@ def upcoming_restricted_events(currency: str = "USD", db: Session = Depends(get_
     settings = get_or_create_settings(db)
     events = list_restricted_events(db, currency=currency, from_time=now_utc(), to_time=now_utc() + timedelta(days=14), limit=100)
     return [payload for event in events if (payload := event_to_dict(event, settings))]
+
+
+@router.post("/api/news/restricted-events/sync")
+def sync_news_restricted_events(db: Session = Depends(get_db)) -> dict[str, int]:
+    try:
+        count = sync_restricted_events(db)
+        db.commit()
+        return {"synced": count}
+    except Exception:
+        db.rollback()
+        logger.warning("Manual restricted news sync failed", exc_info=True)
+        return {"synced": 0}
 
 
 @router.get("/api/news/restriction-status", response_model=NewsRestrictionStatusOut)

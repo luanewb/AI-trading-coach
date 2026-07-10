@@ -487,9 +487,17 @@ def _cooldown_until(last_loss: Trade | None, minutes: int) -> datetime | None:
     close_time = last_loss.close_time
     if close_time.tzinfo is None:
         close_time = close_time.replace(tzinfo=now_utc().tzinfo)
+    current_time = now_utc()
+    if close_time > current_time + timedelta(minutes=1):
+        fallback_time = last_loss.created_at or last_loss.updated_at
+        if fallback_time:
+            if fallback_time.tzinfo is None:
+                fallback_time = fallback_time.replace(tzinfo=current_time.tzinfo)
+            if fallback_time <= current_time + timedelta(minutes=1):
+                close_time = fallback_time
 
     cooldown_end = close_time + timedelta(minutes=minutes)
-    return cooldown_end if cooldown_end > now_utc() else None
+    return cooldown_end if cooldown_end > current_time else None
 
 
 def _risk_percent_from_order(
@@ -901,7 +909,7 @@ def _cache_status(account_id: int, status: dict[str, str | bool | list[str] | No
         logger.warning("Redis risk status cache unavailable", exc_info=True)
 
 
-def evaluate_rules(db: Session, account: Account, trade: Trade | None = None) -> dict[str, object]:
+def evaluate_rules(db: Session, account: Account, trade: Trade | None = None, persist: bool = True) -> dict[str, object]:
     rule = get_or_create_rule(db, account)
     catalog = _rule_catalog(db)
     stats = calculate_stats(db, account.id)
@@ -910,12 +918,14 @@ def evaluate_rules(db: Session, account: Account, trade: Trade | None = None) ->
         findings.extend(_trade_findings(account, rule, trade, catalog))
 
     result = _build_result(account.id, findings, metadata={"stats": stats, "trade_id": trade.id if trade else None})
-    result = _persist_result(db, result, context="trade_event" if trade else "manual_evaluate")
+    if persist:
+        result = _persist_result(db, result, context="trade_event" if trade else "manual_evaluate")
 
     alerts_created: list[str] = []
-    for finding in result.violations:
-        create_alert(db, account.id, finding.severity, finding.rule_code, finding.message)
-        alerts_created.append(finding.rule_code)
+    if persist:
+        for finding in result.violations:
+            create_alert(db, account.id, finding.severity, finding.rule_code, finding.message)
+            alerts_created.append(finding.rule_code)
 
     payload = _result_payload(result, alerts_created=alerts_created)
     _cache_status(

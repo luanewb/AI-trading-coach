@@ -267,6 +267,33 @@ def test_pre_trade_blocks_during_post_loss_cooldown_without_revenge_pattern(monk
     assert "REVENGE_TRADING" not in result["alerts"]
 
 
+def test_pre_trade_uses_received_time_when_legacy_close_time_is_in_future(monkeypatch):
+    current_time = datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
+    last_loss = Trade(
+        id=12,
+        account_id=1,
+        ticket="L3",
+        symbol="EURUSD",
+        order_type="SELL",
+        lot=Decimal("1"),
+        profit=Decimal("-50"),
+        status="closed",
+        close_time=current_time + timedelta(hours=3),
+        created_at=current_time - timedelta(minutes=45),
+        updated_at=current_time - timedelta(minutes=1),
+    )
+    patch_stats(monkeypatch, stats())
+    monkeypatch.setattr(rule_engine, "now_utc", lambda: current_time)
+    monkeypatch.setattr(rule_engine, "latest_closed_trade", lambda _db, _account_id: last_loss)
+    db = FakeSession(rule(cooldown_minutes_after_loss=30))
+
+    result = rule_engine.pre_trade_check(db, account(), payload(symbol="XAUUSD", lot=Decimal("0.5")))
+
+    assert result["allowed"] is True
+    assert "COOLDOWN_AFTER_LOSS" not in result["alerts"]
+    assert "REVENGE_TRADING" not in result["alerts"]
+
+
 def test_pre_trade_evaluates_custom_catalog_rule(monkeypatch):
     patch_stats(monkeypatch, stats())
     monkeypatch.setattr(rule_engine, "latest_closed_trade", lambda _db, _account_id: None)
@@ -338,6 +365,22 @@ def test_evaluate_rules_creates_alert_for_open_trade_without_stop_loss(monkeypat
     assert result["allow_trading"] is False
     assert result["alerts_created"] == ["NO_STOP_LOSS"]
     assert alert.type == "NO_STOP_LOSS"
+
+
+def test_evaluate_rules_can_skip_persistence_for_heartbeat(monkeypatch):
+    patch_stats(monkeypatch, stats())
+    monkeypatch.setattr(rule_engine, "latest_closed_trade", lambda _db, _account_id: None)
+    monkeypatch.setattr(rule_engine, "_cache_status", lambda _account_id, _status: None)
+    db = FakeSession(rule(allow_trading=False))
+
+    result = rule_engine.evaluate_rules(db, account(), persist=False)
+
+    assert result["allow_trading"] is False
+    assert result["alerts_created"] == []
+    assert "PLATFORM_TRADING_ALLOWED" in [item["rule_code"] for item in result["violations"]]
+    assert not any(isinstance(obj, RuleEvaluation) for obj in db.added)
+    assert not any(isinstance(obj, RuleViolation) for obj in db.added)
+    assert not any(isinstance(obj, Alert) for obj in db.added)
 
 
 def test_pre_trade_endpoint_returns_json_block_response(monkeypatch):

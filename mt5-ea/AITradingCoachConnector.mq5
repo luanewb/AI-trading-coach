@@ -97,8 +97,10 @@ string JsonTicketOrNull(ulong value)
 
 string IsoTime(datetime value)
 {
+   long server_offset = (long)(TimeCurrent() - TimeGMT());
+   datetime utc_value = (datetime)((long)value - server_offset);
    MqlDateTime dt;
-   TimeToStruct(value, dt);
+   TimeToStruct(utc_value, dt);
    return StringFormat("%04d-%02d-%02dT%02d:%02d:%02dZ", dt.year, dt.mon, dt.day, dt.hour, dt.min, dt.sec);
 }
 
@@ -346,6 +348,8 @@ void SendTradeEvent(const MqlTradeTransaction &trans, const MqlTradeRequest &req
    if(symbol == "")
       symbol = request.symbol;
 
+   string event_type = EventTypeFromTransaction(trans);
+   string order_type = EnumToString(request.type);
    double profit = 0.0;
    double commission = 0.0;
    double swap = 0.0;
@@ -357,6 +361,12 @@ void SendTradeEvent(const MqlTradeTransaction &trans, const MqlTradeRequest &req
       commission = HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
       swap = HistoryDealGetDouble(trans.deal, DEAL_SWAP);
       close_time = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
+      string deal_order_type = OrderTypeFromDealEntryAndType(
+         HistoryDealGetInteger(trans.deal, DEAL_ENTRY),
+         HistoryDealGetInteger(trans.deal, DEAL_TYPE)
+      );
+      if(deal_order_type != "")
+         order_type = deal_order_type;
    }
 
    double sl = trans.price_sl;
@@ -371,12 +381,12 @@ void SendTradeEvent(const MqlTradeTransaction &trans, const MqlTradeRequest &req
    string json = StringFormat(
       "{\"account_number\":\"%I64d\",\"event_type\":\"%s\",\"symbol\":\"%s\",\"ticket\":\"%I64d\",\"deal_id\":%s,\"position_id\":%s,\"order_type\":\"%s\",\"lot\":%.2f,\"entry_price\":%.5f,\"sl\":%s,\"tp\":%s,\"close_price\":%s,\"profit\":%.2f,\"commission\":%.2f,\"swap\":%.2f,\"open_time\":\"%s\",\"close_time\":%s}",
       AccountInfoInteger(ACCOUNT_LOGIN),
-      EventTypeFromTransaction(trans),
+      event_type,
       JsonEscape(symbol),
       (long)(trans.order > 0 ? trans.order : trans.position),
       deal_id_json,
       position_id_json,
-      JsonEscape(EnumToString(request.type)),
+      JsonEscape(order_type),
       trans.volume,
       trans.price,
       (sl > 0.0 ? DoubleToString(sl, 5) : "null"),
@@ -410,6 +420,16 @@ string OrderTypeFromDealType(long deal_type)
    return "";
 }
 
+string OrderTypeFromDealEntryAndType(long entry, long deal_type)
+{
+   bool is_exit = (entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY);
+   if(deal_type == DEAL_TYPE_SELL)
+      return (is_exit ? "ORDER_TYPE_BUY" : "ORDER_TYPE_SELL");
+   if(deal_type == DEAL_TYPE_BUY)
+      return (is_exit ? "ORDER_TYPE_SELL" : "ORDER_TYPE_BUY");
+   return "";
+}
+
 bool SendHistoryDealEvent(ulong deal_ticket)
 {
    if(deal_ticket == 0 || !HistoryDealSelect(deal_ticket))
@@ -421,7 +441,7 @@ bool SendHistoryDealEvent(ulong deal_ticket)
       return false;
 
    long deal_type = HistoryDealGetInteger(deal_ticket, DEAL_TYPE);
-   string order_type = OrderTypeFromDealType(deal_type);
+   string order_type = OrderTypeFromDealEntryAndType(entry, deal_type);
    if(order_type == "")
       return false;
 
@@ -475,8 +495,6 @@ void SyncRecentTradeHistory()
 
    datetime now = TimeCurrent();
    datetime from = now - MathMax(1, HistorySyncLookbackHours) * 3600;
-   if(LastHistorySyncAt > 0)
-      from = LastHistorySyncAt - 300;
    if(from < 0)
       from = 0;
 

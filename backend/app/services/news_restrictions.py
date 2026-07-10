@@ -25,7 +25,7 @@ RESTRICTED_EVENT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("fomc_rate_decision", ("fomc rate decision", "federal funds rate", "interest rate decision", "fed interest rate")),
     ("fomc_statement", ("fomc statement", "fed monetary policy statement")),
     ("fomc_press_conference", ("fomc press conference", "fed press conference", "fomc presser")),
-    ("fomc_minutes", ("fomc minutes", "fed minutes")),
+    ("fomc_minutes", ("fomc minutes", "fomc meeting minutes", "fed minutes")),
 )
 
 DEFAULT_BLOCKED_ACTIONS = ["new_order", "manual_close", "modify_sl_tp", "pending_order"]
@@ -207,6 +207,54 @@ class FTMOCalendarProvider(_HttpCalendarProvider):
     source = "ftmo"
 
 
+class FairEconomyCalendarProvider:
+    source = "fair_economy"
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def get_events(self, *, from_time: datetime, to_time: datetime, currencies: list[str] | None = None) -> list[EconomicEvent]:
+        currency_filter = {currency.upper() for currency in currencies or []}
+        start = _ensure_utc(from_time)
+        end = _ensure_utc(to_time)
+        with httpx.Client(timeout=20) as client:
+            response = client.get(self.url)
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, list):
+            return []
+        events = [event for item in payload if isinstance(item, dict) and (event := self._parse_item(item))]
+        return [
+            event
+            for event in events
+            if start <= event.scheduled_at <= end and (not currency_filter or event.currency.upper() in currency_filter)
+        ]
+
+    def _parse_item(self, item: dict[str, Any]) -> EconomicEvent | None:
+        title = str(item.get("title") or "").strip()
+        currency = str(item.get("country") or "").upper()
+        scheduled_at = _parse_datetime(item.get("date"))
+        if not title or not currency or not scheduled_at:
+            return None
+        restricted, reason, normalized = is_restricted_usd_event(title, currency)
+        return EconomicEvent(
+            id=_stable_event_id(self.source, title, currency, scheduled_at),
+            source=self.source,
+            title=title,
+            normalized_title=normalized,
+            currency=currency,
+            country=currency,
+            scheduled_at=scheduled_at,
+            impact=item.get("impact"),
+            actual=item.get("actual"),
+            forecast=item.get("forecast"),
+            previous=item.get("previous"),
+            is_restricted=restricted,
+            restriction_reason=reason,
+            raw_payload=item,
+        )
+
+
 class FallbackEconomicCalendarProvider(_HttpCalendarProvider):
     source = "fallback"
 
@@ -220,6 +268,8 @@ def build_calendar_provider() -> EconomicCalendarProvider:
             settings.news_restrictions_api_key,
             settings.news_restrictions_api_key_header,
         )
+    if provider in {"fair_economy", "forex_factory"}:
+        return FairEconomyCalendarProvider(settings.news_restrictions_fair_economy_url)
     if provider == "fallback" and settings.news_restrictions_fallback_url:
         return FallbackEconomicCalendarProvider(
             settings.news_restrictions_fallback_url,

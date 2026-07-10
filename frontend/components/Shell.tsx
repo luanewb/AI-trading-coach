@@ -61,7 +61,9 @@ function ShellContent({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
       <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-none px-4 py-5">
+          {children}
+        </div>
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-9 border-t border-line bg-paper/95 backdrop-blur lg:hidden">
         {nav.map((item) => {

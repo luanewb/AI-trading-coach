@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -34,6 +35,7 @@ class TradeOut(BaseModel):
     profit: Decimal
     commission: Decimal
     swap: Decimal
+    net_profit: Decimal = Decimal("0")
     r_multiple: Decimal | None
     status: str
     open_time: datetime | None
@@ -47,13 +49,16 @@ class TradeOut(BaseModel):
     before_entry_image_url: str | None = None
     after_exit_image_url: str | None = None
     analysis_image_url: str | None = None
+    journal_link: str | None = None
+    journal_entry_mode: Literal["screenshots", "notion"] = "notion"
     created_at: datetime
     updated_at: datetime
 
     @model_validator(mode="after")
     def normalize_side(self) -> "TradeOut":
         self.order_type = normalize_order_type(self.order_type, self.entry_price, self.sl, self.tp)
-        if self.status == "closed":
+        self.net_profit = Decimal(self.profit or 0) + Decimal(self.commission or 0) + Decimal(self.swap or 0)
+        if self.status == "closed" and self.r_multiple is None:
             self.r_multiple = realized_r(self.order_type, self.entry_price, self.sl, self.close_price, self.profit)
         return self
 
@@ -65,9 +70,11 @@ class TradePatch(BaseModel):
     emotion: str | None = Field(default=None, max_length=64)
     mistake_tags: list[str] | None = None
     notes: str | None = None
+    r_multiple: Decimal | None = None
     before_entry_image_url: str | None = Field(default=None, max_length=1024)
     after_exit_image_url: str | None = Field(default=None, max_length=1024)
     analysis_image_url: str | None = Field(default=None, max_length=1024)
+    journal_link: str | None = Field(default=None, max_length=2048)
 
 
 class StatsOut(BaseModel):

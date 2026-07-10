@@ -12,6 +12,12 @@ function compactMoney(value: number) {
   return `${sign}${money(Math.abs(value))}`;
 }
 
+function netPnl(trade: Trade) {
+  const explicit = Number(trade.net_profit);
+  if (Number.isFinite(explicit)) return explicit;
+  return Number(trade.profit || 0) + Number(trade.commission || 0) + Number(trade.swap || 0);
+}
+
 function tradeDate(trade: Trade) {
   const raw = trade.close_time || trade.open_time;
   if (!raw) return null;
@@ -57,7 +63,7 @@ function summarizeTradesByDay(trades: Trade[]) {
     if (!date) return;
     const key = dateKey(date);
     const current = summaries.get(key) || { pnl: 0, trades: 0 };
-    current.pnl += Number(trade.profit || 0);
+    current.pnl += netPnl(trade);
     current.trades += 1;
     summaries.set(key, current);
   });

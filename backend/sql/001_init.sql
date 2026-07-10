@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS trades (
     emotion VARCHAR(64),
     mistake_tags VARCHAR[] DEFAULT '{}',
     notes TEXT,
+    before_entry_image_url TEXT,
+    after_exit_image_url TEXT,
+    analysis_image_url TEXT,
+    journal_link TEXT,
+    journal_entry_mode VARCHAR(16) NOT NULL DEFAULT 'notion',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(account_id, ticket)

@@ -127,6 +127,7 @@ export const api = {
   updateNewsSettings: (payload: Partial<NewsRestrictionSettings>) =>
     request<NewsRestrictionSettings>("/api/settings/news-restrictions", { method: "PATCH", body: JSON.stringify(payload) }),
   restrictedNewsEvents: (currency = "USD") => request<NewsRestrictedEvent[]>(`/api/news/restricted-events?currency=${encodeURIComponent(currency)}`),
+  syncRestrictedNewsEvents: () => request<{ synced: number }>("/api/news/restricted-events/sync", { method: "POST" }),
   upcomingRestrictedNewsEvents: () => request<NewsRestrictedEvent[]>("/api/news/restricted-events/upcoming"),
   newsRestrictionStatus: (symbol = "XAUUSD", action: NewsTradeAction = "new_order") =>
     request<NewsRestrictionStatus>(`/api/news/restriction-status${queryString({ symbol, action })}`),
