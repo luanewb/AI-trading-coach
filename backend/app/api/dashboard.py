@@ -127,7 +127,7 @@ def _cooldown_until(db: Session, account_id: int, minutes: int):
 
 
 def _is_transient_rule(rule_code: str) -> bool:
-    return rule_code in {"COOLDOWN_AFTER_LOSS", "REVENGE_TRADING"}
+    return rule_code in {"COOLDOWN_AFTER_LOSS", "MAX_CONSECUTIVE_LOSSES", "REVENGE_TRADING"}
 
 
 def _metadata_value(metadata: dict[str, Any], key: str) -> str | None:
@@ -218,7 +218,13 @@ def risk_summary(db: Session = Depends(get_db), account_id: int | None = None) -
             .limit(10)
         )
     )
-    active_violations = [item for item in active_violations if not _is_transient_rule(item.rule_code)]
+    consecutive_losses_active = consecutive_losses.percent_used >= 100
+    active_violations = [
+        item
+        for item in active_violations
+        if not _is_transient_rule(item.rule_code)
+        or (item.rule_code == "MAX_CONSECUTIVE_LOSSES" and consecutive_losses_active)
+    ]
 
     lock_active = any(item.action == "lock" for item in active_violations) or total_drawdown.percent_used >= 100
     block_active = (
@@ -434,7 +440,9 @@ def rule_indicators(db: Session = Depends(get_db), account_id: int | None = None
     account = _selected_account(db, account_id)
     catalog = list(db.scalars(select(Rule).order_by(Rule.code)))
     risk_rule = _risk_rule_or_default(db, account.id)
+    stats = calculate_stats(db, account.id)
     cooldown_active = bool(_cooldown_until(db, account.id, int(risk_rule.cooldown_minutes_after_loss)))
+    consecutive_losses_active = int(stats["consecutive_losses"]) >= int(risk_rule.max_consecutive_losses)
     day_start, day_end = trading_day_bounds()
     today_counts = {
         code: count
@@ -464,6 +472,7 @@ def rule_indicators(db: Session = Depends(get_db), account_id: int | None = None
         if not violation.is_resolved and (
             not _is_transient_rule(violation.rule_code)
             or (violation.rule_code == "COOLDOWN_AFTER_LOSS" and cooldown_active)
+            or (violation.rule_code == "MAX_CONSECUTIVE_LOSSES" and consecutive_losses_active)
         ):
             active_by_code.setdefault(violation.rule_code, violation)
 

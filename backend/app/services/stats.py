@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import Select, and_, asc, func, not_, or_, select
@@ -71,7 +72,19 @@ def get_selected_account(db: Session, account_id: int | None = None) -> Account 
     return get_current_account(db)
 
 
-def count_consecutive_losses(trades: list[Trade]) -> int:
+def count_consecutive_losses(
+    trades: list[Trade],
+    *,
+    day_start: datetime | None = None,
+    day_end: datetime | None = None,
+) -> int:
+    if day_start is not None and day_end is not None:
+        trades = [
+            trade
+            for trade in trades
+            if trade.close_time is not None and day_start <= trade.close_time <= day_end
+        ]
+
     losses = 0
     for trade in reversed(trades):
         if trade_net_pnl(trade) < 0:
@@ -125,7 +138,7 @@ def calculate_stats(db: Session, account_id: int | None = None) -> dict[str, flo
         "max_drawdown": float(abs(max_drawdown)),
         "trades_today": int(trades_today or 0),
         "daily_pnl": float(daily_pnl or 0),
-        "consecutive_losses": count_consecutive_losses(trades),
+        "consecutive_losses": count_consecutive_losses(trades, day_start=day_start, day_end=day_end),
     }
 
 

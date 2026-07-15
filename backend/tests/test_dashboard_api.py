@@ -149,6 +149,55 @@ def test_dashboard_cooldown_uses_received_time_when_close_time_is_in_future(monk
     assert dashboard_api._cooldown_until(FakeSession(), 1, 30) is None
 
 
+def test_risk_summary_ignores_previous_day_consecutive_loss_violation(monkeypatch):
+    current_time = datetime(2026, 7, 15, 8, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(dashboard_api, "current_account_or_404", lambda _db: account())
+    monkeypatch.setattr(dashboard_api, "now_utc", lambda: current_time)
+    monkeypatch.setattr(
+        dashboard_api,
+        "calculate_stats",
+        lambda _db, _account_id: {
+            "total_trades": 2,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "average_r": -1.0,
+            "max_drawdown": 0.0,
+            "trades_today": 1,
+            "daily_pnl": -100.0,
+            "consecutive_losses": 1,
+        },
+    )
+    monkeypatch.setattr(dashboard_api, "latest_closed_trade", lambda _db, _account_id: None)
+    stale_violation = RuleViolation(
+        id=21,
+        evaluation_id=20,
+        rule_id=1,
+        account_id=1,
+        rule_code="MAX_CONSECUTIVE_LOSSES",
+        severity="warning",
+        action="block",
+        message="Trade blocked because the consecutive loss limit was reached.",
+        violation_metadata={"consecutive_losses": 2, "max_consecutive_losses": 2},
+        is_resolved=False,
+        created_at=current_time - timedelta(days=1),
+    )
+    db = FakeSession(
+        scalar_results=[rule(max_consecutive_losses=2), None],
+        scalars_results=[[stale_violation]],
+    )
+    client = client_with_db(db)
+    try:
+        response = client.get("/api/dashboard/risk-summary")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["consecutive_losses"]["current"] == 1
+    assert body["trading_status"] == "allowed"
+    assert body["active_restrictions"] == []
+
+
 def test_risk_activity_filters_resolved_and_warning_items(monkeypatch):
     current_time = datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(dashboard_api, "current_account_or_404", lambda _db: account())
@@ -200,6 +249,7 @@ def test_snapshot_and_pre_trade_history_empty_states(monkeypatch):
 def test_rule_indicators_include_latest_trigger(monkeypatch):
     current_time = datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(dashboard_api, "current_account_or_404", lambda _db: account())
+    monkeypatch.setattr(dashboard_api, "calculate_stats", lambda _db, _account_id: {"consecutive_losses": 0})
     catalog_rule = Rule(
         id=1,
         name="Max daily loss",
