@@ -49,6 +49,16 @@ PostgreSQL is initialized with schema and sample seed data from `backend/sql`.
    - `DefaultRR`: default reward-to-risk used for the TP line
    - `OrderHotkey`: default `t`, sends the current panel plan through the same pre-trade check
 
+## Use the standalone offline EA
+
+`mt5-ea/AITradingCoachOfflineGuard.mq5` is a separate EA that keeps the same order panel but does not call the backend and does not require WebRequest. A compiled `AITradingCoachOfflineGuard.ex5` is also included after a successful local build.
+
+Attach only `AITradingCoachOfflineGuard` when you want local enforcement. It uses its own `ATCO_` chart-object prefix, the default magic number `260830`, and the order comment `ATC Offline Guard`, so it is distinct from `AITradingCoachConnector`.
+
+The offline inputs mirror the backend defaults: 5 trades per day, 5% daily loss, 10% total loss/drawdown, 3 consecutive losses, a 30-minute post-loss cooldown/revenge check, max lot 1.0, max risk 1%, mandatory SL, and the FTMO restricted USD news window. The trading day follows `Europe/Prague` DST automatically when `AutoPragueTradingDay=true`. News checks use MT5's built-in Economic Calendar; `NewsFailClosed=false` keeps trading available if that calendar is unavailable.
+
+Database-created custom catalog rules, dashboard alerts, and journal synchronization are backend features and are intentionally not part of the offline EA.
+
 ## Test Heartbeat
 
 After the EA is attached, check the MT5 Experts tab for successful heartbeat logs. You can also test by HTTP:

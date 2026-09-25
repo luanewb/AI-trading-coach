@@ -432,8 +432,13 @@ string OrderTypeFromDealEntryAndType(long entry, long deal_type)
 
 bool SendHistoryDealEvent(ulong deal_ticket)
 {
-   if(deal_ticket == 0 || !HistoryDealSelect(deal_ticket))
+   if(deal_ticket == 0)
       return false;
+
+   // HistoryDealGetTicket(index) already selects the deal for property access.
+   // Calling HistoryDealSelect() here would replace the list created by
+   // HistorySelect() with a single deal and make the outer sync loop skip all
+   // remaining deals, including fills received while MT5 was offline.
 
    long entry = HistoryDealGetInteger(deal_ticket, DEAL_ENTRY);
    string event_type = EventTypeFromDealEntry(entry);
