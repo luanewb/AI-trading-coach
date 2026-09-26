@@ -3,7 +3,7 @@
 //| Standalone order panel with local risk and FTMO rule checks.      |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.001"
+#property version   "1.002"
 #property description "Standalone AI Trading Coach order panel. No backend or WebRequest required."
 #property description "Risk, discipline, drawdown and FTMO news checks run locally in MT5."
 
@@ -488,12 +488,23 @@ void SaveStateToGlobal()
    double entry = PriceLineValue(LINE_ENTRY);
    double sl = PriceLineValue(LINE_SL);
    double tp = PriceLineValue(LINE_TP);
+   bool tp_exists = (ObjectFind(0, LINE_TP) >= 0 && tp > 0.0);
+
    if(entry > 0.0)
       GlobalVariableSet(GVKey("ENTRY"), entry);
    if(sl > 0.0)
       GlobalVariableSet(GVKey("SL"), sl);
-   if(tp > 0.0)
+
+   if(tp_exists)
+   {
       GlobalVariableSet(GVKey("TP"), tp);
+      GlobalVariableSet(GVKey("TP_EXISTS"), 1.0);
+   }
+   else
+   {
+      GlobalVariableSet(GVKey("TP"), 0.0);
+      GlobalVariableSet(GVKey("TP_EXISTS"), 0.0);
+   }
 
    GlobalVariableSet(GVKey("SYM_HASH"), (double)SymbolHash(_Symbol));
    GlobalVariableSet(GVKey("AUTOTP"), AutoTPEnabled ? 1.0 : 0.0);
@@ -517,6 +528,7 @@ void ClearGlobalState()
    GlobalVariableDel(GVKey("ENTRY"));
    GlobalVariableDel(GVKey("SL"));
    GlobalVariableDel(GVKey("TP"));
+   GlobalVariableDel(GVKey("TP_EXISTS"));
    GlobalVariableDel(GVKey("SYM_HASH"));
    GlobalVariableDel(GVKey("RISK"));
    GlobalVariableDel(GVKey("RR"));
@@ -585,7 +597,10 @@ bool IsOrderHotkey(int key_code)
 
 void SetEditText(string object_name, double value)
 {
-   ObjectSetString(0, object_name, OBJPROP_TEXT, DoubleToString(NormalizePrice(value), _Digits));
+   if(value <= 0.0)
+      ObjectSetString(0, object_name, OBJPROP_TEXT, "0");
+   else
+      ObjectSetString(0, object_name, OBJPROP_TEXT, DoubleToString(NormalizePrice(value), _Digits));
 }
 
 bool IsValidPlan(string order_type, double entry, double sl, double tp, string &reason)
@@ -696,7 +711,13 @@ void UpdateTPFromRR(string order_type)
 {
    double rr = StringToDouble(ObjectGetString(0, OBJ_RR, OBJPROP_TEXT));
    if(rr <= 0.0)
-      rr = DefaultRR;
+   {
+      if(GlobalVariableCheck(GVKey("RR")))
+         rr = GlobalVariableGet(GVKey("RR"));
+      if(rr <= 0.0)
+         rr = DefaultRR;
+      ObjectSetString(0, OBJ_RR, OBJPROP_TEXT, DoubleToString(rr, 2));
+   }
 
    double entry = PriceLineValue(LINE_ENTRY);
    double sl = PriceLineValue(LINE_SL);
@@ -706,7 +727,10 @@ void UpdateTPFromRR(string order_type)
 
    double tp = (order_type == "BUY" ? entry + risk * rr : entry - risk * rr);
    tp = NormalizePrice(tp);
-   ObjectSetDouble(0, LINE_TP, OBJPROP_PRICE, tp);
+   if(ObjectFind(0, LINE_TP) < 0)
+      CreatePriceLine(LINE_TP, "ATC Offline Take Profit", tp, clrLimeGreen);
+   else
+      ObjectSetDouble(0, LINE_TP, OBJPROP_PRICE, tp);
    SetEditText(OBJ_TP, tp);
 }
 
@@ -726,7 +750,10 @@ void RefreshPlannerFromLines(bool update_rr = true)
    if(UseRiskPositionSizing)
       ObjectSetString(0, OBJ_LOT, OBJPROP_TEXT, DoubleToString(lot, 2));
    if(IsValidPlan(PlanDirection, entry, sl, tp, reason))
-      ObjectSetString(0, OBJ_PLAN, OBJPROP_TEXT, StringFormat("Plan: %s | RR %s | Risk %s%% | Lot %.2f", PlanDirection, ObjectGetString(0, OBJ_RR, OBJPROP_TEXT), ObjectGetString(0, OBJ_RISK, OBJPROP_TEXT), lot));
+   {
+      string rr_text = (tp > 0.0) ? ("RR " + ObjectGetString(0, OBJ_RR, OBJPROP_TEXT)) : "No TP";
+      ObjectSetString(0, OBJ_PLAN, OBJPROP_TEXT, StringFormat("Plan: %s | %s | Risk %s%% | Lot %.2f", PlanDirection, rr_text, ObjectGetString(0, OBJ_RISK, OBJPROP_TEXT), lot));
+   }
    else
       ObjectSetString(0, OBJ_PLAN, OBJPROP_TEXT, "Plan: " + reason);
    ChartRedraw();
@@ -742,7 +769,17 @@ void RefreshLinesFromEdits(bool auto_tp_after = false)
    if(sl > 0.0)
       ObjectSetDouble(0, LINE_SL, OBJPROP_PRICE, sl);
    if(tp > 0.0)
-      ObjectSetDouble(0, LINE_TP, OBJPROP_PRICE, tp);
+   {
+      if(ObjectFind(0, LINE_TP) < 0)
+         CreatePriceLine(LINE_TP, "ATC Offline Take Profit", tp, clrLimeGreen);
+      else
+         ObjectSetDouble(0, LINE_TP, OBJPROP_PRICE, tp);
+   }
+   else
+   {
+      ObjectDelete(0, LINE_TP);
+   }
+
    if(auto_tp_after && AutoTPEnabled)
    {
       SyncDirectionFromEntrySL();
@@ -766,7 +803,17 @@ void ToggleAutoTP()
 {
    AutoTPEnabled = !AutoTPEnabled;
    UpdateAutoTPButton();
-   ApplyAutoTPFromRR();
+   if(AutoTPEnabled)
+   {
+      double rr = StringToDouble(ObjectGetString(0, OBJ_RR, OBJPROP_TEXT));
+      if(rr <= 0.0 && GlobalVariableCheck(GVKey("RR")))
+      {
+         double saved_rr = GlobalVariableGet(GVKey("RR"));
+         if(saved_rr > 0.0)
+            ObjectSetString(0, OBJ_RR, OBJPROP_TEXT, DoubleToString(saved_rr, 2));
+      }
+      ApplyAutoTPFromRR();
+   }
    RefreshPlannerFromLines(false);
 }
 
@@ -782,6 +829,7 @@ void CreateTradeLines()
    double entry = 0.0;
    double sl = 0.0;
    double tp = 0.0;
+   bool tp_exists = true;
 
    if(!symbol_changed)
    {
@@ -795,11 +843,17 @@ void CreateTradeLines()
          sl = NormalizePrice(GlobalVariableGet(GVKey("SL")));
       if(tp <= 0.0 && GlobalVariableCheck(GVKey("TP")))
          tp = NormalizePrice(GlobalVariableGet(GVKey("TP")));
+
+      if(GlobalVariableCheck(GVKey("TP_EXISTS")))
+         tp_exists = (GlobalVariableGet(GVKey("TP_EXISTS")) > 0.5);
+      else
+         tp_exists = (tp > 0.0 || ObjectFind(0, LINE_TP) >= 0);
    }
    else
    {
       ObjectsDeleteAll(0, LINE_PREFIX);
       ClearGlobalState();
+      tp_exists = true;
    }
 
    if(entry <= 0.0)
@@ -814,12 +868,21 @@ void CreateTradeLines()
    double default_distance = MathMax(100.0 * _Point, SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE) * 100.0);
    if(sl <= 0.0)
       sl = NormalizePrice(entry - default_distance);
-   if(tp <= 0.0)
-      tp = NormalizePrice(entry + default_distance * DefaultRR);
 
    CreatePriceLine(LINE_ENTRY, "ATC Offline Entry", entry, clrDodgerBlue);
    CreatePriceLine(LINE_SL, "ATC Offline Stop Loss", sl, clrTomato);
-   CreatePriceLine(LINE_TP, "ATC Offline Take Profit", tp, clrLimeGreen);
+
+   if(AutoTPEnabled || (tp_exists && tp > 0.0))
+   {
+      if(tp <= 0.0)
+         tp = NormalizePrice(entry + default_distance * DefaultRR);
+      CreatePriceLine(LINE_TP, "ATC Offline Take Profit", tp, clrLimeGreen);
+   }
+   else
+   {
+      ObjectDelete(0, LINE_TP);
+      tp = 0.0;
+   }
 
    SaveStateToGlobal();
 }
@@ -1163,6 +1226,22 @@ void OnDeinit(const int reason)
 
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
 {
+   if(id == CHARTEVENT_OBJECT_DELETE)
+   {
+      if(sparam == LINE_TP)
+      {
+         if(AutoTPEnabled)
+         {
+            AutoTPEnabled = false;
+            UpdateAutoTPButton();
+         }
+         SetEditText(OBJ_TP, 0.0);
+         RefreshPlannerFromLines(false);
+         SaveStateToGlobal();
+      }
+      return;
+   }
+
    if(id == CHARTEVENT_KEYDOWN)
    {
       if(IsOrderHotkey((int)lparam))
